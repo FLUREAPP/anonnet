@@ -1,0 +1,8 @@
+<svg width="200" height="200" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+  <mask id="cut">
+    <rect width="24" height="24" fill="white" />
+    <line x1="0" y1="24" x2="24" y2="0" stroke="black" stroke-width="2" />
+    <line x1="0" y1="0" x2="24" y2="24" stroke="black" stroke-width="2" />
+  </mask>
+  <circle cx="12" cy="12" r="9" fill="none" stroke="black" stroke-width="5" mask="url(#cut)" />
+</svg>

@@ -1,0 +1,6 @@
+{
+  "name": "Anonnect",
+  "description": "Real-time anonymous chat application with Live Snap camera sharing and end-to-end encryption.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
