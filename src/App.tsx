@@ -197,6 +197,10 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [connectionStatus, setConnectionStatus] = useState<"searching" | "connected" | "disconnected">("connected");
+  
+  // STATISTIK ONLINE: State untuk menyimpan jumlah pengguna
+  const [onlineCount, setOnlineCount] = useState<number>(0);
+
   const [messages, setMessages] = useState<Message[]>([
     { id: 1, text: "Halo! Selamat datang di Anonnect.", sender: "stranger", type: "text" }
   ]);
@@ -210,21 +214,27 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
 
   useEffect(() => {
     endOfMessagesRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, connectionStatus]);
 
   useEffect(() => {
     socket.connect();
 
+    // Menerima data statistik online real-time dari server
+    socket.on("online_count", (count: number) => {
+      setOnlineCount(count);
+    });
+
     socket.on("waiting", () => {
       setConnectionStatus("searching");
-      setMessages(prev => [...prev, { id: Date.now(), text: "Mencari orang asing...", sender: "stranger", type: "text" }]);
+      // Mengubah pesan bot menjadi pesan interaktif
+      setMessages(prev => [...prev, { id: Date.now(), text: "Sistem mendeteksi pencarian baru. Memindai jaringan untuk menghubungkanmu dengan manusia asli...", sender: "stranger", type: "text" }]);
     });
 
     socket.on("connected", (data: { isBot?: boolean }) => {
       setConnectionStatus("connected");
       const welcomeText = data?.isBot 
         ? "Terhubung dengan sistem otomatis! Ucapkan Hai." 
-        : "Terhubung dengan orang asing anonim! Ucapkan Hai.";
+        : "Pasangan ditemukan! 100% murni orang asli. Ucapkan Hai 👋";
       setMessages(prev => [...prev, { id: Date.now(), text: welcomeText, sender: "stranger", type: "text" }]);
     });
 
@@ -242,6 +252,7 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
     });
 
     return () => {
+      socket.off("online_count");
       socket.off("waiting");
       socket.off("connected");
       socket.off("receive_message");
@@ -342,7 +353,16 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
           </div>
         </div>
 
-        <div className="absolute right-4 top-4 z-30 flex items-center gap-3">
+        {/* POJOK KANAN ATAS: INDIKATOR ONLINE & TEMA */}
+        <div className="absolute right-4 top-4 z-30 flex items-center gap-2 sm:gap-3">
+          {/* Badge Indikator Online Real-time */}
+          <div className={`flex items-center justify-center gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-full border backdrop-blur-md shadow-lg ${t.contactBtn}`}>
+            <span className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]"></span>
+            <span className="text-xs sm:text-sm font-semibold tracking-wide">
+              {onlineCount} <span className="hidden sm:inline">Orang Asli</span> Online
+            </span>
+          </div>
+
           <motion.button onClick={() => setIsDarkMode(!isDarkMode)} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} className={`flex items-center justify-center rounded-full border backdrop-blur-md w-10 h-10 shadow-lg ${t.contactBtn}`}>
             {isDarkMode ? <Sun size={18} className={t.themeToggleIcon} /> : <Moon size={18} className={t.themeToggleIcon} />}
           </motion.button>
@@ -392,6 +412,17 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
                     )}
                   </motion.div>
                 ))}
+
+                {/* ANIMASI RUANG TUNGGU INTERAKTIF KETIKA MENCARI */}
+                {connectionStatus === "searching" && (
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className={`flex justify-start group`}>
+                    <div className={`relative px-5 py-3 rounded-2xl rounded-tl-none backdrop-blur-md border ${t.msgStranger} opacity-80 flex items-center gap-3`}>
+                      <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                      <span className="text-sm italic">Menunggu ada orang lain yang menekan tombol Next...</span>
+                    </div>
+                  </motion.div>
+                )}
+
               </AnimatePresence>
               <div ref={endOfMessagesRef} className="h-2 shrink-0" />
             </div>

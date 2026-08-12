@@ -21,20 +21,17 @@ async function startServer() {
 
   // Store user waiting for match
   let waitingUser: CustomSocket | null = null;
-
-  // Bot responses for fallback when chatting alone
-  const botResponses = [
-    "Hey there! Great to meet you on Anonnect. How's your day going?",
-    "Hello! I'm enjoying the secret encrypted chat vibes here. What are you up to?",
-    "Hey! Have you tried taking a Live Snap yet with the camera button?",
-    "Haha awesome! Where are you connecting from?",
-    "Nice! This real-time messaging is super smooth.",
-    "That's cool! Feel free to send a photo or text anytime."
-  ];
+  
+  // Menambahkan variabel untuk menghitung jumlah pengguna online murni
+  let onlineUsersCount = 0;
 
   io.on('connection', (rawSocket: Socket) => {
     const socket = rawSocket as CustomSocket;
     console.log('Client connected:', socket.id);
+
+    // Tambah jumlah saat ada yang masuk dan beritahu semua klien
+    onlineUsersCount++;
+    io.emit('online_count', onlineUsersCount);
 
     // 1. FIND PARTNER / NEXT
     socket.on('find_partner', () => {
@@ -68,31 +65,8 @@ async function startServer() {
         waitingUser = socket;
         socket.emit('waiting');
 
-        // If no second client joins within 2.5 seconds, pair with interactive stranger bot
-        setTimeout(() => {
-          if (waitingUser === socket && socket.connected && !socket.room) {
-            const botRoom = `bot_room_${socket.id}`;
-            socket.join(botRoom);
-            socket.room = botRoom;
-            socket.isBotPartner = true;
-            waitingUser = null;
-
-            socket.emit('connected', { isBot: true });
-            
-            // Welcome message
-            setTimeout(() => {
-              if (socket.room === botRoom) {
-                socket.emit('receive_message', {
-                  id: Date.now(),
-                  text: "Connected with an anonymous stranger! Say hi 👋",
-                  sender: "stranger",
-                  type: "text",
-                  status: "read"
-                });
-              }
-            }, 500);
-          }
-        }, 2500);
+        // BOT DIBUANG DARI SINI: Tidak ada lagi setTimeout untuk memanggil bot.
+        // Pengguna akan murni menunggu sampai ada manusia asli yang terhubung.
       }
     });
 
@@ -100,27 +74,12 @@ async function startServer() {
     socket.on('send_message', (messageData: any) => {
       if (!socket.room) return;
 
-      if (socket.isBotPartner) {
-        setTimeout(() => {
-          if (socket.room) {
-            const randomReply = botResponses[Math.floor(Math.random() * botResponses.length)];
-            socket.emit('receive_message', {
-              id: Date.now(),
-              text: randomReply,
-              sender: "stranger",
-              type: "text",
-              status: "read"
-            });
-          }
-        }, 1200 + Math.random() * 800);
-      } else {
-        // Send message to partner in the room with sender adjusted
-        const partnerData = {
-          ...messageData,
-          sender: "stranger"
-        };
-        socket.to(socket.room).emit('receive_message', partnerData);
-      }
+      // BOT DIBUANG DARI SINI: Pesan murni hanya diteruskan ke partner asli
+      const partnerData = {
+        ...messageData,
+        sender: "stranger"
+      };
+      socket.to(socket.room).emit('receive_message', partnerData);
     });
 
     // 3. UNSEND MESSAGE
@@ -146,7 +105,14 @@ async function startServer() {
     };
 
     socket.on('stop_chat', handleDisconnect);
-    socket.on('disconnect', handleDisconnect);
+    
+    socket.on('disconnect', () => {
+      // Kurangi jumlah saat ada yang keluar dan beritahu semua klien
+      onlineUsersCount = Math.max(0, onlineUsersCount - 1);
+      io.emit('online_count', onlineUsersCount);
+      
+      handleDisconnect();
+    });
   });
 
   // Health check endpoint
