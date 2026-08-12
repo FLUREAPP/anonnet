@@ -428,11 +428,19 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
             </div>
 
             {/* KOTAK INPUT PESAN (DENGAN REF DAN FOKUS OTOMATIS AKTIF) */}
-            <div className={`p-4 backdrop-blur-xl border-t z-20 shrink-0 ${t.inputArea}`}>
-              <div className="flex items-center gap-3">
-                <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={handleStopChat} className="flex-shrink-0 px-5 py-3 rounded-full bg-rose-500/10 text-rose-500 border border-rose-500/30 hover:bg-rose-500 hover:text-white transition-colors text-sm">
+            <div className={`p-3 sm:p-4 backdrop-blur-xl border-t z-20 shrink-0 ${t.inputArea}`}>
+              <div className="flex items-center gap-2 sm:gap-3">
+                
+                {/* TOMBOL STOP YANG BARU - LEBIH ELEGAN & GLOWING SAAT DI-HOVER */}
+                <motion.button 
+                  whileHover={{ scale: 1.05 }} 
+                  whileTap={{ scale: 0.95 }} 
+                  onClick={handleStopChat} 
+                  className="flex-shrink-0 px-5 sm:px-6 py-3 rounded-full bg-zinc-800/40 text-rose-400 border border-rose-500/20 hover:bg-rose-600 hover:text-white hover:border-rose-500 hover:shadow-[0_0_15px_rgba(225,29,72,0.5)] transition-all text-sm font-semibold backdrop-blur-md"
+                >
                   Stop
                 </motion.button>
+                
                 <form 
                   onSubmit={(e) => {
                     e.preventDefault();
@@ -446,18 +454,27 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
                     value={inputValue} 
                     onChange={(e) => setInputValue(e.target.value)} 
                     placeholder="Ketik pesan..." 
-                    className={`w-full border rounded-full py-3 pl-5 pr-24 focus:outline-none text-sm ${t.inputField}`} 
+                    className={`w-full border rounded-full py-3 pl-5 pr-20 sm:pr-24 focus:outline-none text-sm transition-all focus:ring-2 focus:ring-cyan-500/30 ${t.inputField}`} 
                   />
-                  <div className="absolute right-2 flex items-center gap-1">
-                    <motion.button type="button" whileHover={{ scale: 1.1 }} onClick={openCamera} className={`p-2 rounded-full ${t.inputIcons}`}>
+                  <div className="absolute right-1 sm:right-2 flex items-center gap-0.5 sm:gap-1">
+                    <motion.button type="button" whileHover={{ scale: 1.1, rotate: 5 }} onClick={openCamera} className={`p-2 rounded-full ${t.inputIcons}`}>
                       <Camera size={18} />
                     </motion.button>
-                    <motion.button type="submit" whileHover={{ scale: 1.1 }} className={`p-2 rounded-full ${t.inputIcons}`}>
+                    {/* ICON SEND DIBERI WARNA CYAN AGAR MATCHING */}
+                    <motion.button type="submit" whileHover={{ scale: 1.1, x: 2 }} className={`p-2 rounded-full text-cyan-500 hover:text-cyan-400 transition-colors`}>
                       <Send size={18} />
                     </motion.button>
                   </div>
                 </form>
-                <EmojiBurst label="Next" emojis="👍, 🚀, 🔥, ⚡, 💬" onClick={handleNextPerson} buttonClassName="flex-shrink-0 px-8 py-3 rounded-full font-bold transition-all text-sm bg-green-500 text-black" />
+
+                {/* TOMBOL NEXT YANG BARU - GRADASI PREMIUM & SHADOW GLOWING */}
+                <EmojiBurst 
+                  label="Next" 
+                  emojis="👍, 🚀, 🔥, ⚡, 💬" 
+                  onClick={handleNextPerson} 
+                  buttonClassName="flex-shrink-0 px-6 sm:px-8 py-3 rounded-full font-bold transition-all text-sm bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-[0_0_15px_rgba(6,182,212,0.4)] hover:shadow-[0_0_25px_rgba(6,182,212,0.6)]" 
+                />
+                
               </div>
             </div>
           </div>
