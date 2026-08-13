@@ -5,7 +5,7 @@
 
 import { useRef, useState, useEffect } from "react"
 import { motion, AnimatePresence } from "motion/react"
-import { Camera, Trash2, Send, X, Moon, Sun, CheckCheck, ArrowRight, MapPin, Mail, Instagram, Linkedin } from "lucide-react"
+import { Camera, Trash2, Send, X, Moon, Sun, CheckCheck, ArrowRight, MapPin, Mail, Instagram, Linkedin, Mic, Square } from "lucide-react"
 import ParticleText from "./components/ParticleText"
 import EmojiBurst from "./components/EmojiBurst"
 import MagneticButton from "./components/MagneticButton"
@@ -19,7 +19,7 @@ type Message = {
   id: number | string;
   text?: string;
   image?: string;
-  audio?: boolean;
+  audio?: string;
   sender: "me" | "stranger";
   type: "text" | "snap" | "audio";
   status?: "sent" | "delivered" | "read";
@@ -197,9 +197,12 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [connectionStatus, setConnectionStatus] = useState<"searching" | "connected" | "disconnected">("connected");
-  
-  // STATISTIK ONLINE: State untuk menyimpan jumlah pengguna
   const [onlineCount, setOnlineCount] = useState<number>(0);
+
+  // STATE UNTUK REKAMAN SUARA (VOICE NOTE)
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   const [messages, setMessages] = useState<Message[]>([
     { id: 1, text: "Halo! Selamat datang di Anonnect.", sender: "stranger", type: "text" }
@@ -219,14 +222,12 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
   useEffect(() => {
     socket.connect();
 
-    // Menerima data statistik online real-time dari server
     socket.on("online_count", (count: number) => {
       setOnlineCount(count);
     });
 
     socket.on("waiting", () => {
       setConnectionStatus("searching");
-      // Mengubah pesan bot menjadi pesan interaktif
       setMessages(prev => [...prev, { id: Date.now(), text: "Sistem mendeteksi pencarian baru. Memindai jaringan untuk menghubungkanmu dengan manusia asli...", sender: "stranger", type: "text" }]);
     });
 
@@ -287,6 +288,46 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
     socket.emit("unsend_message", id);
   };
 
+  // LOGIKA MEREKAM VOICE NOTE
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
+      };
+
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const reader = new FileReader();
+        reader.readAsDataURL(audioBlob);
+        reader.onloadend = () => {
+          const base64Audio = reader.result as string;
+          const newMsg: Message = { id: Date.now(), audio: base64Audio, sender: "me", type: "audio", status: "sent" };
+          setMessages(prev => [...prev, newMsg]);
+          socket.emit("send_message", newMsg);
+        };
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (err) {
+      console.error("Gagal mengakses mikrofon:", err);
+      alert("Izinkan akses mikrofon untuk mengirim pesan suara.");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
   const openCamera = async () => {
     setIsCameraOpen(true);
     try {
@@ -301,13 +342,31 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
     setIsCameraOpen(false);
   };
 
+  // MENGAMBIL FOTO & MENAMBAHKAN WATERMARK
   const takeSnapshot = () => {
     if (videoRef.current) {
       const canvas = document.createElement("canvas");
-      canvas.width = videoRef.current.videoWidth; canvas.height = videoRef.current.videoHeight;
+      canvas.width = videoRef.current.videoWidth; 
+      canvas.height = videoRef.current.videoHeight;
       const ctx = canvas.getContext("2d");
+      
       if (ctx) {
-        ctx.translate(canvas.width, 0); ctx.scale(-1, 1); ctx.drawImage(videoRef.current, 0, 0);
+        // Balik gambar seperti cermin
+        ctx.translate(canvas.width, 0); 
+        ctx.scale(-1, 1); 
+        ctx.drawImage(videoRef.current, 0, 0);
+
+        // RESET BALIKAN agar tulisan watermark tidak ikut terbalik
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+        // CETAK WATERMARK
+        ctx.font = "italic 600 16px sans-serif";
+        ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+        ctx.textAlign = "right";
+        ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
+        ctx.shadowBlur = 4;
+        ctx.fillText("dipotret dari camera", canvas.width - 15, canvas.height - 20);
+
         const base64Image = canvas.toDataURL("image/jpeg", 0.7); 
         const newMsg: Message = { id: Date.now(), image: base64Image, sender: "me", type: "snap", status: "sent" };
         setMessages(prev => [...prev, newMsg]);
@@ -355,7 +414,6 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
 
         {/* POJOK KANAN ATAS: INDIKATOR ONLINE & TEMA */}
         <div className="absolute right-4 top-4 z-30 flex items-center gap-2 sm:gap-3">
-          {/* Badge Indikator Online Real-time */}
           <div className={`flex items-center justify-center gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-full border backdrop-blur-md shadow-lg ${t.contactBtn}`}>
             <span className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]"></span>
             <span className="text-xs sm:text-sm font-semibold tracking-wide">
@@ -388,6 +446,7 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
               <AnimatePresence initial={false}>
                 {messages.map((msg) => (
                   <motion.div key={msg.id} initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0 }} className={`flex ${msg.sender === "me" ? "justify-end" : "justify-start"} group`}>
+                    {/* Pesan Teks */}
                     {msg.type === "text" && (
                       <div onPointerDown={() => { if(msg.sender === "me") setActiveMessageId(msg.id); }} className={`relative max-w-[85%] sm:max-w-[75%] px-5 py-3 rounded-2xl backdrop-blur-md border cursor-pointer select-none ${msg.sender === "me" ? `rounded-tr-none ${t.msgMe}` : `rounded-tl-none ${t.msgStranger}`}`}>
                         <div className="flex items-end gap-2 pointer-events-none">
@@ -403,11 +462,25 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
                         )}
                       </div>
                     )}
+                    
+                    {/* Pesan Foto Kamera */}
                     {msg.type === "snap" && (
                       <div className={`relative p-2 rounded-2xl border-2 backdrop-blur-md cursor-pointer select-none ${t.snapBox}`}>
                         <div className="relative overflow-hidden w-[65vw] max-w-[260px] aspect-[4/3] bg-zinc-800 rounded-lg">
                           <img src={msg.image} alt="Live Snap" className="w-full h-full object-cover" />
                         </div>
+                      </div>
+                    )}
+
+                    {/* Pesan Suara (Voice Note) */}
+                    {msg.type === "audio" && (
+                      <div onPointerDown={() => { if(msg.sender === "me") setActiveMessageId(msg.id); }} className={`relative p-2 sm:p-3 rounded-2xl backdrop-blur-md border cursor-pointer select-none ${msg.sender === "me" ? `rounded-tr-none ${t.msgMe}` : `rounded-tl-none ${t.msgStranger}`}`}>
+                        <audio controls src={msg.audio} className="h-10 w-[60vw] max-w-[260px] outline-none" />
+                        {msg.sender === "me" && activeMessageId === msg.id && (
+                          <motion.button onClick={(e) => { e.stopPropagation(); handleUnsend(msg.id); setActiveMessageId(null); }} className="absolute -top-3 -left-3 w-8 h-8 flex items-center justify-center rounded-full bg-rose-500 text-white shadow-lg z-20">
+                            <Trash2 size={14} />
+                          </motion.button>
+                        )}
                       </div>
                     )}
                   </motion.div>
@@ -427,8 +500,8 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
               <div ref={endOfMessagesRef} className="h-2 shrink-0" />
             </div>
 
-            {/* KOTAK INPUT PESAN (DENGAN REF DAN FOKUS OTOMATIS AKTIF) */}
-            <div className={`p-3 sm:p-4 backdrop-blur-xl border-t z-20 shrink-0 ${t.inputArea}`}>
+            {/* KOTAK INPUT PESAN (PB-6 / PB-4 Dinaikkan Sedikit & PR dilonggarkan) */}
+            <div className={`p-3 sm:p-4 pb-6 sm:pb-4 backdrop-blur-xl border-t z-20 shrink-0 ${t.inputArea}`}>
               <div className="flex items-center gap-2 sm:gap-3">
                 
                 {/* TOMBOL STOP */}
@@ -436,7 +509,7 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
                   whileHover={{ scale: 1.05 }} 
                   whileTap={{ scale: 0.95 }} 
                   onClick={handleStopChat} 
-                  className="flex-shrink-0 px-5 sm:px-6 py-3 rounded-full bg-zinc-800/40 text-rose-400 border border-rose-500/20 hover:bg-rose-600 hover:text-white hover:border-rose-500 hover:shadow-[0_0_15px_rgba(225,29,72,0.5)] transition-all text-sm font-semibold backdrop-blur-md"
+                  className="flex-shrink-0 px-4 sm:px-6 py-3 rounded-full bg-zinc-800/40 text-rose-400 border border-rose-500/20 hover:bg-rose-600 hover:text-white hover:border-rose-500 hover:shadow-[0_0_15px_rgba(225,29,72,0.5)] transition-all text-sm font-semibold backdrop-blur-md"
                 >
                   Stop
                 </motion.button>
@@ -448,6 +521,7 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
                   }}
                   className="relative flex-1 flex items-center min-w-0"
                 >
+                  {/* Papan Ketik di-padding lebih besar (pr-[110px]) agar tidak terhimpit icon */}
                   <input 
                     ref={inputRef}
                     type="text"
@@ -459,13 +533,27 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
                     value={inputValue} 
                     onChange={(e) => setInputValue(e.target.value)} 
                     placeholder="Ketik pesan..." 
-                    className={`w-full border rounded-full py-3 pl-5 pr-20 sm:pr-24 focus:outline-none text-sm transition-all focus:ring-2 focus:ring-cyan-500/30 ${t.inputField}`} 
+                    className={`w-full border rounded-full py-3 pl-5 pr-[110px] sm:pr-[120px] focus:outline-none text-sm transition-all focus:ring-2 focus:ring-cyan-500/30 ${t.inputField}`} 
                   />
                   <div className="absolute right-1 sm:right-2 flex items-center gap-0.5 sm:gap-1">
+                    
+                    {/* ICON KAMERA */}
                     <motion.button type="button" whileHover={{ scale: 1.1, rotate: 5 }} onClick={openCamera} className={`p-2 rounded-full ${t.inputIcons}`}>
                       <Camera size={18} />
                     </motion.button>
-                    {/* ICON SEND DIBERI WARNA CYAN AGAR MATCHING */}
+                    
+                    {/* ICON VOICE NOTE (MIC / STOP RECORD) */}
+                    {isRecording ? (
+                      <motion.button type="button" whileHover={{ scale: 1.1 }} onClick={stopRecording} className={`p-2 rounded-full text-rose-500 animate-pulse`}>
+                        <Square size={18} fill="currentColor" />
+                      </motion.button>
+                    ) : (
+                      <motion.button type="button" whileHover={{ scale: 1.1, rotate: 5 }} onClick={startRecording} className={`p-2 rounded-full ${t.inputIcons}`}>
+                        <Mic size={18} />
+                      </motion.button>
+                    )}
+
+                    {/* ICON SEND */}
                     <motion.button type="submit" whileHover={{ scale: 1.1, x: 2 }} className={`p-2 rounded-full text-cyan-500 hover:text-cyan-400 transition-colors`}>
                       <Send size={18} />
                     </motion.button>
@@ -477,7 +565,7 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
                   label="Next" 
                   emojis="👍, 🚀, 🔥, ⚡, 💬" 
                   onClick={handleNextPerson} 
-                  buttonClassName="flex-shrink-0 px-6 sm:px-8 py-3 rounded-full font-bold transition-all text-sm bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-[0_0_15px_rgba(6,182,212,0.4)] hover:shadow-[0_0_25px_rgba(6,182,212,0.6)]" 
+                  buttonClassName="flex-shrink-0 px-5 sm:px-8 py-3 rounded-full font-bold transition-all text-sm bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-[0_0_15px_rgba(6,182,212,0.4)] hover:shadow-[0_0_25px_rgba(6,182,212,0.6)]" 
                 />
                 
               </div>
