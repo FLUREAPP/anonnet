@@ -431,7 +431,7 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
             <div className={`p-3 sm:p-4 backdrop-blur-xl border-t z-20 shrink-0 ${t.inputArea}`}>
               <div className="flex items-center gap-2 sm:gap-3">
                 
-                {/* TOMBOL STOP YANG BARU - LEBIH ELEGAN & GLOWING SAAT DI-HOVER */}
+                {/* TOMBOL STOP */}
                 <motion.button 
                   whileHover={{ scale: 1.05 }} 
                   whileTap={{ scale: 0.95 }} 
@@ -450,7 +450,12 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
                 >
                   <input 
                     ref={inputRef}
-                    type="text" 
+                    type="text"
+                    inputMode="text"
+                    enterKeyHint="send"
+                    autoComplete="off"
+                    style={{ WebkitUserSelect: "text", userSelect: "text", touchAction: "manipulation" }}
+                    onTouchStart={(e) => e.stopPropagation()}
                     value={inputValue} 
                     onChange={(e) => setInputValue(e.target.value)} 
                     placeholder="Ketik pesan..." 
@@ -467,7 +472,7 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
                   </div>
                 </form>
 
-                {/* TOMBOL NEXT YANG BARU - GRADASI PREMIUM & SHADOW GLOWING */}
+                {/* TOMBOL NEXT */}
                 <EmojiBurst 
                   label="Next" 
                   emojis="👍, 🚀, 🔥, ⚡, 💬" 
