@@ -31,8 +31,8 @@ const words = ["rahasia", "anonim", "aman", "terjaga"];
 
 function BlurWord({ word, trigger }: { word: string; trigger: number }) {
   const letters = word.split("");
-  const STAGGER = 45;      
-  const DURATION = 500;    
+  const STAGGER = 45;
+  const DURATION = 500;
   const GRADIENT_HOLD = STAGGER * letters.length + DURATION + 200;
 
   const [letterStates, setLetterStates] = useState<{ opacity: number; blur: number }[]>(
@@ -155,7 +155,7 @@ function LandingPage({ onStart }: { onStart: () => void }) {
           </span>
         </div>
       </header>
-      
+
       <div className="relative z-10 w-full max-w-[1400px] mx-auto px-6 lg:px-12 py-24 sm:py-32 lg:py-40">
         <div className="w-full lg:max-w-[85%] xl:max-w-[75%]">
           <div className={`mb-6 sm:mb-8 transition-all duration-700 ${isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
@@ -164,7 +164,7 @@ function LandingPage({ onStart }: { onStart: () => void }) {
               Platform Obrolan Anonim Anti-Fake
             </span>
           </div>
-          
+
           <div className="mb-10 sm:mb-14">
             <h1 className={`text-left text-4xl sm:text-5xl md:text-6xl lg:text-[5.5rem] font-extrabold leading-[1.15] sm:leading-[1.1] tracking-tight text-white transition-all duration-1000 flex flex-col gap-1 sm:gap-3 ${isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
               <span className="break-words">Koneksi nyata,</span>
@@ -178,15 +178,9 @@ function LandingPage({ onStart }: { onStart: () => void }) {
           </div>
 
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: isVisible ? 1 : 0, y: isVisible ? 0 : 20 }} transition={{ delay: 0.3, duration: 0.8 }}>
-            <motion.button
-              whileHover={{ scale: 1.03, boxShadow: "0 0 30px rgba(255,255,255,0.3)" }}
-              whileTap={{ scale: 0.97 }}
-              onClick={onStart}
-              className="group relative inline-flex items-center gap-3 sm:gap-4 px-6 py-3.5 sm:px-8 sm:py-4 bg-white text-black font-bold rounded-full overflow-hidden transition-all cursor-pointer text-sm sm:text-base w-full sm:w-auto justify-center"
-            >
-              <span className="tracking-wide uppercase">Mulai Obrolan Sekarang</span>
-              <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1.5 transition-transform" />
-            </motion.button>
+            <ShaderButton onClick={onStart} className="h-14 w-[280px] sm:w-[320px] uppercase text-xs sm:text-sm font-bold">
+  Mulai Obrolan Sekarang
+</ShaderButton>
           </motion.div>
         </div>
       </div>
@@ -238,8 +232,8 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
 
     socket.on("connected", (data: { isBot?: boolean }) => {
       setConnectionStatus("connected");
-      const welcomeText = data?.isBot 
-        ? "Terhubung dengan sistem otomatis! Ucapkan Hai." 
+      const welcomeText = data?.isBot
+        ? "Terhubung dengan sistem otomatis! Ucapkan Hai."
         : "Pasangan ditemukan! 100% murni orang asli. Ucapkan Hai 👋";
       setMessages(prev => [...prev, { id: Date.now(), text: welcomeText, sender: "stranger", type: "text" }]);
     });
@@ -279,9 +273,9 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
     };
   }, []);
 
-  const handleNextPerson = () => { 
+  const handleNextPerson = () => {
     setConnectionStatus("searching");
-    socket.emit("find_partner"); 
+    socket.emit("find_partner");
   };
 
   const handleStopChat = () => {
@@ -289,16 +283,16 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
     setConnectionStatus("disconnected");
     setMessages(prev => [...prev, { id: Date.now(), text: "Kamu telah meninggalkan obrolan.", sender: "stranger", type: "text" }]);
   };
-// --- FUNGSI DETEKSI JARI BOS MENGETIK ---
+  // --- FUNGSI DETEKSI JARI BOS MENGETIK ---
   const handleInputChange = (e: any) => {
     setInputValue(e.target.value);
-    
+
     // Lapor ke server
     socket.emit("typing");
 
     // Reset timer
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    
+
     // Kalau 2 detik diam, lapor berhenti
     typingTimeoutRef.current = setTimeout(() => {
       socket.emit("stop_typing");
@@ -376,14 +370,14 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
   const takeSnapshot = () => {
     if (videoRef.current) {
       const canvas = document.createElement("canvas");
-      canvas.width = videoRef.current.videoWidth; 
+      canvas.width = videoRef.current.videoWidth;
       canvas.height = videoRef.current.videoHeight;
       const ctx = canvas.getContext("2d");
-      
+
       if (ctx) {
         // Balik gambar seperti cermin
-        ctx.translate(canvas.width, 0); 
-        ctx.scale(-1, 1); 
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
         ctx.drawImage(videoRef.current, 0, 0);
 
         // RESET BALIKAN agar tulisan watermark tidak ikut terbalik
@@ -397,7 +391,7 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
         ctx.shadowBlur = 4;
         ctx.fillText("dipotret dari camera", canvas.width - 15, canvas.height - 20);
 
-        const base64Image = canvas.toDataURL("image/jpeg", 0.7); 
+        const base64Image = canvas.toDataURL("image/jpeg", 0.7);
         const newMsg: Message = { id: Date.now(), image: base64Image, sender: "me", type: "snap", status: "sent" };
         setMessages(prev => [...prev, newMsg]);
         socket.emit("send_message", newMsg);
@@ -428,243 +422,143 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
   };
 
   return (
-    <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={`p-2 sm:p-[1.5%] font-sans overflow-x-hidden transition-colors duration-700 ${t.bg}`}>
-      <div className="relative isolate w-full min-h-[calc(100svh-2rem)] flex flex-col items-center justify-start pt-3 sm:pt-4">
-        
-        {/* Latar Belakang Magnetic Dots */}
-        <div className="absolute inset-0 overflow-hidden rounded-[24px] sm:rounded-[40px] pointer-events-none">
-          <div className={`absolute inset-0 w-full h-full transition-opacity duration-700 ${isDarkMode ? 'opacity-40' : 'opacity-100'}`}>
-            <MagneticDots dotColor={isDarkMode ? "rgba(255, 255, 255, 0.4)" : "rgba(0, 0, 0, 0.4)"} />
-          </div>
-          <div className="pointer-events-none absolute inset-0 transition-colors duration-700">
-            <div className={`absolute inset-0 transition-colors duration-700 bg-gradient-to-b ${t.gradient1}`} />
-            <div className={`absolute inset-0 transition-colors duration-700 ${t.gradient2}`} />
-          </div>
-        </div>
-
-        {/* HEADER UTAMA: Logo di Kiri/Tengah & Tombol Online/Tema di Kanan (Fleksibel & Aman) */}
-        <div className="relative z-30 w-full max-w-3xl flex items-center justify-between px-3 sm:px-4 mb-3 shrink-0">
-          <div className="flex items-center justify-start w-[160px] sm:w-[220px] h-[45px]">
-            <Text3DFlip />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <div className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full border backdrop-blur-md shadow-lg ${t.contactBtn}`}>
-              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-              <span className="text-xs font-semibold tracking-wide">
-                {onlineCount} <span className="hidden sm:inline">Online</span>
-              </span>
+    <div className="chat-wrapper">
+      <div className="page">
+        <div className="topbar">
+          <div className="logo"><span className="dot-mark"></span> Anonnect</div>
+          <div className="top-actions">
+            <div className="badge"><span className="pulse"></span> {onlineCount} Online</div>
+            
+            {/* Tombol Tema Cukup 1 Saja */}
+            <div className="icon-btn" onClick={() => setIsDarkMode(!isDarkMode)}>
+              {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
             </div>
-
-            <motion.button onClick={() => setIsDarkMode(!isDarkMode)} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} className={`flex items-center justify-center rounded-full border backdrop-blur-md w-9 h-9 shadow-lg ${t.contactBtn}`}>
-              {isDarkMode ? <Sun size={16} className={t.themeToggleIcon} /> : <Moon size={16} className={t.themeToggleIcon} />}
-            </motion.button>
           </div>
         </div>
 
-        {/* KOTAK CHAT UTAMA (Murni statis di bawah header, tanpa tabrakan) */}
-        <motion.div initial={{ opacity: 0, y: 20, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={springConfig} className="relative z-20 w-full max-w-3xl h-[78vh] sm:h-[80vh] max-h-[800px] flex flex-col items-center mx-4 gap-4">
-          <div ref={cardRef} className={`relative w-full flex flex-col flex-1 min-h-0 overflow-hidden backdrop-blur-xl border rounded-3xl ${t.chatCard}`}>
-            <div className={`px-6 py-4 border-b flex justify-between items-center z-10 shrink-0 ${t.chatHeader}`}>
-              <div>
-                <h2 className={`font-semibold flex items-center gap-2 ${t.chatHeaderText}`}>
-                  <span className={`w-2 h-2 rounded-full ${connectionStatus === "connected" ? "bg-green-500" : "bg-red-500"}`} />
-                  {connectionStatus === "searching" ? "Mencari Teman..." : connectionStatus === "connected" ? "Connected" : "Terputus"}
-                </h2>
-                <p className={`text-xs mt-1 ${t.chatSubtext}`}>Identity hidden. All chats are encrypted.</p>
+        <div className="chat-card" ref={cardRef}>
+          <div className="chat-status">
+            <div className="line1">
+              <span className={`pulse ${connectionStatus === "connected" ? "bg-green-500" : "bg-red-500"}`}></span> 
+              <span className="capitalize">{connectionStatus === "searching" ? "Mencari Teman..." : connectionStatus}</span>
+            </div>
+            <div className="line2">Identity hidden · End-to-end encrypted</div>
+          </div>
+
+          <div className="chat-body" onClick={() => setActiveMessageId(null)}>
+            {messages.length === 0 && connectionStatus !== "searching" ? (
+              <div className="empty-hint">
+                <div className="ring">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.97-4.03 9-9 9-1.5 0-2.91-.37-4.15-1.02L3 21l1.02-3.85A8.96 8.96 0 013 12c0-4.97 4.03-9 9-9s9 4.03 9 9z"/>
+                  </svg>
+                </div>
+                Mulai obrolan — lawan bicaramu anonim.
               </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 z-10 flex flex-col pb-6 [&::-webkit-scrollbar]:hidden" onClick={() => setActiveMessageId(null)}>
+            ) : (
               <AnimatePresence initial={false}>
                 {messages.map((msg) => {
                   const jam = new Date(typeof msg.id === 'number' && msg.id > 100000 ? msg.id : Date.now()).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-
+                  
                   return (
-                    <motion.div key={msg.id} initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0 }} className={`flex ${msg.sender === "me" ? "justify-end" : "justify-start"} group`}>
+                    <motion.div key={msg.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={`flex ${msg.sender === "me" ? "justify-end" : "justify-start"} mb-3 w-full`}>
                       
-                      {/* Pesan Teks */}
                       {msg.type === "text" && (
-                        <div onPointerDown={() => { if(msg.sender === "me") setActiveMessageId(msg.id); }} className={`relative max-w-[85%] sm:max-w-[75%] px-5 py-3 rounded-2xl backdrop-blur-md border cursor-pointer select-none ${msg.sender === "me" ? `rounded-tr-none ${t.msgMe}` : `rounded-tl-none ${t.msgStranger}`}`}>
-                          <div className="flex items-end gap-2 pointer-events-none">
-                            <p className="flex-1 break-words">{msg.text}</p>
-                            
-                            <div className="flex items-center gap-1 shrink-0 mb-[-4px]">
-                              <span className="text-[10px] opacity-60 font-medium">{jam}</span>
-                              {msg.sender === "me" && msg.status && (
-                                <CheckCheck size={14} className={msg.status === "read" ? "text-blue-500" : "text-zinc-400"} />
-                              )}
-                            </div>
-                          </div>
-                          
-                          {msg.sender === "me" && activeMessageId === msg.id && (
-                            <motion.button onClick={(e) => { e.stopPropagation(); handleUnsend(msg.id); setActiveMessageId(null); }} className="absolute -top-3 -left-3 w-8 h-8 flex items-center justify-center rounded-full bg-rose-500 text-white shadow-lg z-20">
-                              <Trash2 size={14} />
-                            </motion.button>
-                          )}
-                        </div>
-                      )}
-                      
-                      {/* Pesan Foto Kamera (Desain Premium Holographic Glass & Jam di Kanan Atas) */}
-                      {msg.type === "snap" && (
-                        <div className={`relative group p-2 rounded-3xl backdrop-blur-xl border border-white/20 shadow-2xl cursor-pointer select-none overflow-hidden transition-all duration-300 ${t.snapBox}`}
-                             style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.02))' }}>
-                          
-                          <div className="relative overflow-hidden w-[70vw] max-w-[280px] aspect-[4/3] rounded-2xl bg-zinc-900 shadow-inner">
-                            <img src={msg.image} alt="Live Snap" className="w-full h-full object-cover rounded-2xl transform group-hover:scale-105 transition-transform duration-500" />
-                            
-                            {/* JAM & CENTANG DI POJOK KANAN ATAS (Agar tulisan watermark tidak tertutup) */}
-                            <div className="absolute top-3 right-3 px-3 py-1.5 bg-black/60 backdrop-blur-md border border-white/15 rounded-full flex items-center gap-1.5 shadow-lg">
-                              <span className="text-[11px] text-white/90 font-medium tracking-wide">{jam}</span>
-                              {msg.sender === "me" && msg.status && (
-                                <CheckCheck size={14} className={msg.status === "read" ? "text-cyan-400" : "text-white/60"} />
-                              )}
-                            </div>
-                          </div>
-                        </div>
+                         <div onPointerDown={() => { if(msg.sender === "me") setActiveMessageId(msg.id); }} 
+                              className={`bubble relative ${msg.sender === "me" ? "bg-[#7c6ef2] text-white border-none rounded-tr-sm" : "rounded-tl-sm"}`}>
+                           {msg.text} 
+                           <span className={`time ${msg.sender === "me" ? "text-white/70" : ""}`}>{jam}</span>
+                           
+                           {msg.sender === "me" && activeMessageId === msg.id && (
+                              <button onClick={(e) => { e.stopPropagation(); handleUnsend(msg.id); setActiveMessageId(null); }} className="absolute -top-3 -left-3 w-7 h-7 flex items-center justify-center rounded-full bg-rose-500 text-white shadow-lg z-20">
+                                <Trash2 size={12} />
+                              </button>
+                           )}
+                         </div>
                       )}
 
-                      {/* Pesan Suara (Voice Note) */}
+                      {msg.type === "snap" && (
+                         <div className="bubble p-1.5 overflow-hidden rounded-2xl bg-zinc-900 border-zinc-800" style={{ maxWidth: '220px' }}>
+                            <img src={msg.image} alt="snap" className="w-full h-auto rounded-xl" />
+                         </div>
+                      )}
+
                       {msg.type === "audio" && (
-                        <div onPointerDown={() => { if(msg.sender === "me") setActiveMessageId(msg.id); }} className={`relative p-2 sm:p-3 rounded-2xl backdrop-blur-md border cursor-pointer select-none ${msg.sender === "me" ? `rounded-tr-none ${t.msgMe}` : `rounded-tl-none ${t.msgStranger}`}`}>
-                          <div className="flex flex-col gap-1">
-                            <audio controls src={msg.audio} className="h-10 w-[60vw] max-w-[260px] outline-none" />
-                            
-                            <div className="flex items-center justify-end gap-1 px-1">
-                              <span className="text-[10px] opacity-60 font-medium">{jam}</span>
-                              {msg.sender === "me" && msg.status && (
-                                <CheckCheck size={14} className={msg.status === "read" ? "text-blue-500" : "text-zinc-400"} />
-                              )}
-                            </div>
-                          </div>
-                          {msg.sender === "me" && activeMessageId === msg.id && (
-                            <motion.button onClick={(e) => { e.stopPropagation(); handleUnsend(msg.id); setActiveMessageId(null); }} className="absolute -top-3 -left-3 w-8 h-8 flex items-center justify-center rounded-full bg-rose-500 text-white shadow-lg z-20">
-                              <Trash2 size={14} />
-                            </motion.button>
-                          )}
-                        </div>
+                         <div className={`bubble p-2 ${msg.sender === "me" ? "bg-[#7c6ef2] rounded-tr-sm border-none" : "rounded-tl-sm"}`}>
+                            <audio controls src={msg.audio} className="h-9 w-48 sm:w-56" />
+                         </div>
                       )}
                     </motion.div>
-                  );
+                  )
                 })}
-
-                {/* ANIMASI RUANG TUNGGU INTERAKTIF KETIKA MENCARI */}
+                
                 {connectionStatus === "searching" && (
-                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className={`flex justify-start group`}>
-                    <div className={`relative px-5 py-3 rounded-2xl rounded-tl-none backdrop-blur-md border ${t.msgStranger} opacity-80 flex items-center gap-3`}>
-                      <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                      <span className="text-sm italic">Menunggu ada orang lain yang menekan tombol Next...</span>
-                    </div>
-                  </motion.div>
+                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start mb-2">
+                      <div className="bubble text-sm italic opacity-80 rounded-tl-sm">Mencari orang lain...</div>
+                   </motion.div>
                 )}
-
-                {/* --- TAMPILAN LAWAN SEDANG MENGETIK --- */}
+                
                 {isTyping && connectionStatus === "connected" && (
-                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className={`flex justify-start group`}>
-                    <div className={`relative px-5 py-3 rounded-2xl rounded-tl-none backdrop-blur-md border ${t.msgStranger} flex items-center gap-3`}>
-                      <span className="text-sm italic opacity-80">Lawan bicara sedang mengetik...</span>
-                    </div>
-                  </motion.div>
+                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex justify-start mb-2">
+                      <div className="bubble text-sm italic opacity-80 rounded-tl-sm">Lawan bicara sedang mengetik...</div>
+                   </motion.div>
                 )}
               </AnimatePresence>
-              <div ref={endOfMessagesRef} className="h-2 shrink-0" />
-            </div>
+            )}
+            <div ref={endOfMessagesRef} className="h-2 shrink-0" />
+          </div>
 
-            {/* KOTAK INPUT PESAN */}
-            <div className={`p-3 sm:p-4 pb-6 sm:pb-4 backdrop-blur-xl border-t z-20 shrink-0 ${t.inputArea}`}>
-              <div className="flex items-center gap-2 sm:gap-3">
-                
-                {/* TOMBOL STOP */}
-                <motion.button 
-                  whileHover={{ scale: 1.05 }} 
-                  whileTap={{ scale: 0.95 }} 
-                  onClick={handleStopChat} 
-                  className="flex-shrink-0 px-4 sm:px-6 py-3 rounded-full bg-zinc-800/40 text-rose-400 border border-rose-500/20 hover:bg-rose-600 hover:text-white hover:border-rose-500 hover:shadow-[0_0_15px_rgba(225,29,72,0.5)] transition-all text-sm font-semibold backdrop-blur-md"
-                >
-                  Stop
-                </motion.button>
-                
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    handleSend();
-                  }}
-                  className="relative flex-1 flex items-center min-w-0"
-                >
-                  <input 
-                    ref={inputRef}
-                    type="text"
-                    inputMode="text"
-                    enterKeyHint="send"
-                    autoComplete="off"
-                    style={{ WebkitUserSelect: "text", userSelect: "text", touchAction: "manipulation" }}
-                    onTouchStart={(e) => e.stopPropagation()}
-                    value={inputValue} 
-                    onChange={handleInputChange} 
-                    placeholder="Ketik pesan..." 
-                    className={`w-full border rounded-full py-3 pl-5 pr-[110px] sm:pr-[120px] focus:outline-none text-sm transition-all focus:ring-2 focus:ring-cyan-500/30 ${t.inputField}`} 
-                  />
-                  <div className="absolute right-1 sm:right-2 flex items-center gap-0.5 sm:gap-1">
-                    
-                    {/* ICON KAMERA */}
-                    <motion.button type="button" whileHover={{ scale: 1.1, rotate: 5 }} onClick={openCamera} className={`p-2 rounded-full ${t.inputIcons}`}>
-                      <Camera size={18} />
-                    </motion.button>
-                    
-                    {/* ICON VOICE NOTE */}
-                    {isRecording ? (
-                      <motion.button type="button" whileHover={{ scale: 1.1 }} onClick={stopRecording} className={`p-2 rounded-full text-rose-500 animate-pulse`}>
-                        <Square size={18} fill="currentColor" />
-                      </motion.button>
-                    ) : (
-                      <motion.button type="button" whileHover={{ scale: 1.1, rotate: 5 }} onClick={startRecording} className={`p-2 rounded-full ${t.inputIcons}`}>
-                        <Mic size={18} />
-                      </motion.button>
-                    )}
-
-                    {/* ICON SEND */}
-                    <motion.button type="submit" whileHover={{ scale: 1.1, x: 2 }} className={`p-2 rounded-full text-cyan-500 hover:text-cyan-400 transition-colors`}>
-                      <Send size={18} />
-                    </motion.button>
-                  </div>
-                </form>
-
-                {/* TOMBOL NEXT */}
-                <EmojiBurst 
-                  label="Next" 
-                  emojis="👍, 🚀, 🔥, ⚡, 💬" 
-                  onClick={handleNextPerson} 
-                  buttonClassName="flex-shrink-0 px-5 sm:px-8 py-3 rounded-full font-bold transition-all text-sm bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-[0_0_15px_rgba(6,182,212,0.4)] hover:shadow-[0_0_25px_rgba(6,182,212,0.6)]" 
-                />
-                
+          <div className="chat-input">
+            <button type="button" onClick={handleStopChat} className="btn btn-ghost hover:text-rose-400 hover:border-rose-400/50 transition-colors">Stop</button>
+            
+            <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="input-field">
+              <input 
+                ref={inputRef}
+                type="text" 
+                placeholder="Ketik pesan..." 
+                value={inputValue}
+                onChange={handleInputChange}
+              />
+              <div className="mini-icon" onClick={openCamera}>
+                <Camera size={18} />
               </div>
-            </div>
+              <div className="mini-icon" onClick={isRecording ? stopRecording : startRecording} style={{ color: isRecording ? '#ef4444' : '' }}>
+                {isRecording ? <Square size={18} className="animate-pulse" /> : <Mic size={18} />}
+              </div>
+            </form>
+            
+            <ShaderButton onClick={handleNextPerson} className="h-[42px] w-[100px]">
+  Next
+</ShaderButton>
           </div>
+        </div>
 
-          <div className="flex items-center gap-2 text-sm opacity-50 pb-2 cursor-pointer hover:opacity-100 transition-opacity" onClick={onGoToAbout}>
-            <span className={`text-xs ${t.securedByText}`}>Secured by</span>
-            <MagneticButton label="anonnect" fill="transparent" textColor={isDarkMode ? "#D4D4D8" : "#3F3F46"} sweepColor="#0601E6" sweepTextColor="#FFFFFF" borderOptions={{ color: isDarkMode ? "#52525B" : "#A1A1AA", width: 1 }} paddingX={12} paddingY={4} radius={9999} font={{ fontSize: 10, fontWeight: "bold" }} />
-          </div>
-        </motion.div>
+        {/* FUNGSI MENUJU ABOUT DEVELOPER SUDAH KEMBALI DI SINI */}
+        <div className="footnote flex items-center justify-center gap-1.5 mt-4">
+  Secured by 
+  <ShaderButton onClick={onGoToAbout} className="h-6 w-24 text-[10px]">
+    Anonnect
+  </ShaderButton>
+</div>
 
         <AnimatePresence>
           {isCameraOpen && (
-            <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-zinc-950/80 backdrop-blur-md">
-              <button onClick={closeCamera} className="absolute top-6 right-6 p-3 rounded-full bg-white/10 text-white hover:bg-rose-500 z-50">
+            <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-zinc-950/90 backdrop-blur-md">
+              <button onClick={closeCamera} className="absolute top-6 right-6 p-3 rounded-full bg-white/10 text-white hover:bg-rose-500 z-50 transition-colors">
                 <X size={24} />
               </button>
-              <div className="relative w-[90%] max-w-md aspect-[3/4] sm:aspect-video rounded-3xl overflow-hidden border-2 border-cyan-400 bg-black">
+              <div className="relative w-[90%] max-w-md aspect-[3/4] sm:aspect-video rounded-3xl overflow-hidden border-2 border-[#7c6ef2] bg-black shadow-[0_0_30px_rgba(124,110,242,0.3)]">
                 <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover transform -scale-x-100" />
               </div>
-              <motion.button whileTap={{ scale: 0.9 }} onClick={takeSnapshot} className="mt-8 w-20 h-20 rounded-full border-4 border-cyan-400 flex items-center justify-center bg-cyan-500/20">
-                <div className="w-14 h-14 rounded-full bg-cyan-400 shadow-lg" />
+              <motion.button whileTap={{ scale: 0.9 }} onClick={takeSnapshot} className="mt-8 w-20 h-20 rounded-full border-4 border-[#7c6ef2] flex items-center justify-center bg-[#7c6ef2]/20">
+                <div className="w-14 h-14 rounded-full bg-[#7c6ef2] shadow-[0_0_20px_rgba(124,110,242,0.6)]" />
               </motion.button>
             </div>
           )}
         </AnimatePresence>
       </div>
-    </motion.section>
-  )
+    </div>
+  );
 }
 
 function GradientBackground() {
@@ -724,8 +618,8 @@ function AboutPage({ onBack }: { onBack: () => void }) {
               </div>
               <div className="flex items-center gap-2.5">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5 text-zinc-300 shrink-0">
-                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
-                  <path d="M12 21.5c-1.666 0-3.26-.43-4.663-1.214L3 21l.732-4.14A9.458 9.458 0 0 1 2.5 12c0-5.247 4.253-9.5 9.5-9.5s9.5 4.253 9.5 9.5-4.253 9.5-9.5 9.5z"/>
+                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
+                  <path d="M12 21.5c-1.666 0-3.26-.43-4.663-1.214L3 21l.732-4.14A9.458 9.458 0 0 1 2.5 12c0-5.247 4.253-9.5 9.5-9.5s9.5 4.253 9.5 9.5-4.253 9.5-9.5 9.5z" />
                 </svg>
                 <a href="https://wa.me/13312207673" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">
                   +1 (331)-220-7673
@@ -757,7 +651,25 @@ function AboutPage({ onBack }: { onBack: () => void }) {
 }
 
 type Page = "landing" | "chat" | "about";
-
+function ShaderButton({ children, onClick, className = "h-11 w-32" }: { children: React.ReactNode, onClick?: () => void, className?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`relative inline-flex overflow-hidden rounded-full p-[1.5px] focus:outline-none active:scale-95 transition-transform ${className}`}
+    >
+      <motion.div
+        animate={{ rotate: 360 }}
+        transition={{ repeat: Infinity, duration: 3, ease: "linear" }}
+        className="absolute z-0 bg-[conic-gradient(from_90deg_at_50%_50%,#18181b_0%,#ffffff_50%,#18181b_100%)]"
+        style={{ width: '400%', height: '400%', top: '-150%', left: '-150%' }}
+      />
+      <span className="relative z-10 inline-flex h-full w-full cursor-pointer items-center justify-center rounded-full bg-[#09090b] text-sm font-medium text-zinc-200 transition-colors hover:bg-[#18181b] tracking-wide">
+        {children}
+      </span>
+    </button>
+  );
+}
 export default function App() {
   const [currentPage, setCurrentPage] = useState<Page>("landing");
 
