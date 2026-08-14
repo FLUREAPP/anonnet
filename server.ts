@@ -29,9 +29,28 @@ async function startServer() {
     const socket = rawSocket as CustomSocket;
     console.log('Client connected:', socket.id);
 
-    // Tambah jumlah saat ada yang masuk dan beritahu semua klien
-    onlineUsersCount++;
-    io.emit('online_count', onlineUsersCount);
+   // --- MULAI PASTE DARI SINI ---
+  
+  // 1. Tambah jumlah user asli (Tetap pakai variabel Bos)
+  onlineUsersCount++;
+
+  // 2. Terapkan Trik Pemancing Angka (Tambah 49 jika ada minimal 1 user)
+  let angkaPemancing = onlineUsersCount >= 1 ? onlineUsersCount + 49 : 0;
+
+  // 3. Kirim angka palsu tersebut ke klien (Tetap pakai event 'online_count' milik Bos)
+  io.emit('online_count', angkaPemancing);
+
+
+  // 4. Tambahkan fitur "Sedang mengetik..." persis di bawah sini
+  socket.on('typing', () => {
+    socket.broadcast.emit('lawan_sedang_mengetik');
+  });
+
+  socket.on('stop_typing', () => {
+    socket.broadcast.emit('lawan_berhenti_mengetik');
+  });
+  
+  // --- SAMPAI SINI ---
 
     // 1. FIND PARTNER / NEXT
     socket.on('find_partner', () => {
@@ -107,9 +126,11 @@ async function startServer() {
     socket.on('stop_chat', handleDisconnect);
     
     socket.on('disconnect', () => {
-      // Kurangi jumlah saat ada yang keluar dan beritahu semua klien
-      onlineUsersCount = Math.max(0, onlineUsersCount - 1);
-      io.emit('online_count', onlineUsersCount);
+// --- MULAI PASTE UNTUK DISCONNECT ---
+    onlineUsersCount = Math.max(0, onlineUsersCount - 1);
+    let angkaBaru = onlineUsersCount >= 1 ? onlineUsersCount + 49 : 0;
+    io.emit('online_count', angkaBaru);
+    // --- SAMPAI SINI ---
       
       handleDisconnect();
     });

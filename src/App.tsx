@@ -10,6 +10,8 @@ import ParticleText from "./components/ParticleText"
 import EmojiBurst from "./components/EmojiBurst"
 import MagneticButton from "./components/MagneticButton"
 import AsciiImage from "./components/AsciiImage"
+import Text3DFlip from "./components/Text3DFlip"
+import { MagneticDots } from "./components/MagneticDots"
 import { io } from "socket.io-client"
 
 const socket = io({ autoConnect: false });
@@ -214,6 +216,9 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [activeMessageId, setActiveMessageId] = useState<number | string | null>(null);
+  // --- STATE INDIKATOR MENGETIK ---
+  const [isTyping, setIsTyping] = useState(false);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     endOfMessagesRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -251,6 +256,15 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
       setConnectionStatus("disconnected");
       setMessages(prev => [...prev, { id: Date.now(), text: "Orang asing telah meninggalkan obrolan.", sender: "stranger", type: "text" }]);
     });
+    // --- PENANGKAP SINYAL MENGETIK ---
+    socket.on("lawan_sedang_mengetik", () => {
+      setIsTyping(true);
+      endOfMessagesRef.current?.scrollIntoView({ behavior: "smooth" });
+    });
+
+    socket.on("lawan_berhenti_mengetik", () => {
+      setIsTyping(false);
+    });
 
     return () => {
       socket.off("online_count");
@@ -259,6 +273,8 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
       socket.off("receive_message");
       socket.off("delete_message");
       socket.off("partner_disconnected");
+      socket.off("lawan_sedang_mengetik");
+      socket.off("lawan_berhenti_mengetik");
       socket.disconnect();
     };
   }, []);
@@ -273,7 +289,21 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
     setConnectionStatus("disconnected");
     setMessages(prev => [...prev, { id: Date.now(), text: "Kamu telah meninggalkan obrolan.", sender: "stranger", type: "text" }]);
   };
+// --- FUNGSI DETEKSI JARI BOS MENGETIK ---
+  const handleInputChange = (e: any) => {
+    setInputValue(e.target.value);
+    
+    // Lapor ke server
+    socket.emit("typing");
 
+    // Reset timer
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    
+    // Kalau 2 detik diam, lapor berhenti
+    typingTimeoutRef.current = setTimeout(() => {
+      socket.emit("stop_typing");
+    }, 2000);
+  };
   const handleSend = () => {
     if (!inputValue.trim()) return;
     const newMsg: Message = { id: Date.now(), text: inputValue, sender: "me", type: "text", status: "sent" };
@@ -359,7 +389,7 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
         // RESET BALIKAN agar tulisan watermark tidak ikut terbalik
         ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-        // CETAK WATERMARK
+        // CETAK WATERMARK DI BAWAH KANAN
         ctx.font = "italic 600 16px sans-serif";
         ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
         ctx.textAlign = "right";
@@ -401,11 +431,13 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
     <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={`p-[1.5%] font-sans overflow-hidden transition-colors duration-700 ${t.bg}`}>
       <div className="relative isolate w-full min-h-[calc(100svh-3vh)] flex items-center justify-center">
         
-        {/* Latar Belakang Video Chat */}
+        {/* Latar Belakang Magnetic Dots */}
         <div className="absolute inset-0 overflow-hidden rounded-[32px] sm:rounded-[40px]">
-          <video autoPlay loop muted playsInline className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ${t.videoOpacity}`}>
-            <source src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/liquid-metal-video_yX6NvjdW-6bLYorR3Ihmlwjivg3pjA978qrSKRU.mp4" type="video/mp4" />
-          </video>
+          
+          <div className={`absolute inset-0 w-full h-full transition-opacity duration-700 ${isDarkMode ? 'opacity-40' : 'opacity-100'}`}>
+            <MagneticDots dotColor={isDarkMode ? "rgba(255, 255, 255, 0.4)" : "rgba(0, 0, 0, 0.4)"} />
+          </div>
+
           <div className="pointer-events-none absolute inset-0 transition-colors duration-700">
             <div className={`absolute inset-0 transition-colors duration-700 bg-gradient-to-b ${t.gradient1}`} />
             <div className={`absolute inset-0 transition-colors duration-700 ${t.gradient2}`} />
@@ -426,9 +458,9 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
           </motion.button>
         </div>
 
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 flex items-center justify-center w-[160px] h-[40px]">
-          <ParticleText text="ANONNECT" colors={t.particleColors as string[]} mode="onEnter" replay={false} position="above" particleSize={2} particleCount={150} mouseEnabled={true} mouseRadius={40} mouseForce={10} fontSize={32} autoFit={true} />
-        </div>
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 flex items-center justify-center w-[300px] h-[100px]">
+  <Text3DFlip />
+</div>
 
         <motion.div initial={{ opacity: 0, y: 40, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={springConfig} className="relative z-20 w-full max-w-3xl h-[75vh] sm:h-[80vh] max-h-[800px] mt-12 flex flex-col items-center mx-4 gap-4">
           <div ref={cardRef} className={`relative w-full flex flex-col flex-1 min-h-0 overflow-hidden backdrop-blur-xl border rounded-3xl ${t.chatCard}`}>
@@ -444,47 +476,76 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
 
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 z-10 flex flex-col pb-6 [&::-webkit-scrollbar]:hidden" onClick={() => setActiveMessageId(null)}>
               <AnimatePresence initial={false}>
-                {messages.map((msg) => (
-                  <motion.div key={msg.id} initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0 }} className={`flex ${msg.sender === "me" ? "justify-end" : "justify-start"} group`}>
-                    {/* Pesan Teks */}
-                    {msg.type === "text" && (
-                      <div onPointerDown={() => { if(msg.sender === "me") setActiveMessageId(msg.id); }} className={`relative max-w-[85%] sm:max-w-[75%] px-5 py-3 rounded-2xl backdrop-blur-md border cursor-pointer select-none ${msg.sender === "me" ? `rounded-tr-none ${t.msgMe}` : `rounded-tl-none ${t.msgStranger}`}`}>
-                        <div className="flex items-end gap-2 pointer-events-none">
-                          <p className="flex-1 break-words">{msg.text}</p>
-                          {msg.sender === "me" && msg.status && (
-                            <span className="shrink-0 mb-[-2px]"><CheckCheck size={14} className={msg.status === "read" ? "text-blue-500" : "text-zinc-400"} /></span>
+                {messages.map((msg) => {
+                  const jam = new Date(typeof msg.id === 'number' && msg.id > 100000 ? msg.id : Date.now()).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+
+                  return (
+                    <motion.div key={msg.id} initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0 }} className={`flex ${msg.sender === "me" ? "justify-end" : "justify-start"} group`}>
+                      
+                      {/* Pesan Teks */}
+                      {msg.type === "text" && (
+                        <div onPointerDown={() => { if(msg.sender === "me") setActiveMessageId(msg.id); }} className={`relative max-w-[85%] sm:max-w-[75%] px-5 py-3 rounded-2xl backdrop-blur-md border cursor-pointer select-none ${msg.sender === "me" ? `rounded-tr-none ${t.msgMe}` : `rounded-tl-none ${t.msgStranger}`}`}>
+                          <div className="flex items-end gap-2 pointer-events-none">
+                            <p className="flex-1 break-words">{msg.text}</p>
+                            
+                            <div className="flex items-center gap-1 shrink-0 mb-[-4px]">
+                              <span className="text-[10px] opacity-60 font-medium">{jam}</span>
+                              {msg.sender === "me" && msg.status && (
+                                <CheckCheck size={14} className={msg.status === "read" ? "text-blue-500" : "text-zinc-400"} />
+                              )}
+                            </div>
+                          </div>
+                          
+                          {msg.sender === "me" && activeMessageId === msg.id && (
+                            <motion.button onClick={(e) => { e.stopPropagation(); handleUnsend(msg.id); setActiveMessageId(null); }} className="absolute -top-3 -left-3 w-8 h-8 flex items-center justify-center rounded-full bg-rose-500 text-white shadow-lg z-20">
+                              <Trash2 size={14} />
+                            </motion.button>
                           )}
                         </div>
-                        {msg.sender === "me" && activeMessageId === msg.id && (
-                          <motion.button onClick={(e) => { e.stopPropagation(); handleUnsend(msg.id); setActiveMessageId(null); }} className="absolute -top-3 -left-3 w-8 h-8 flex items-center justify-center rounded-full bg-rose-500 text-white shadow-lg z-20">
-                            <Trash2 size={14} />
-                          </motion.button>
-                        )}
-                      </div>
-                    )}
-                    
-                    {/* Pesan Foto Kamera */}
-                    {msg.type === "snap" && (
-                      <div className={`relative p-2 rounded-2xl border-2 backdrop-blur-md cursor-pointer select-none ${t.snapBox}`}>
-                        <div className="relative overflow-hidden w-[65vw] max-w-[260px] aspect-[4/3] bg-zinc-800 rounded-lg">
-                          <img src={msg.image} alt="Live Snap" className="w-full h-full object-cover" />
+                      )}
+                      
+                      {/* Pesan Foto Kamera (Desain Premium Holographic Glass & Jam di Kanan Atas) */}
+                      {msg.type === "snap" && (
+                        <div className={`relative group p-2 rounded-3xl backdrop-blur-xl border border-white/20 shadow-2xl cursor-pointer select-none overflow-hidden transition-all duration-300 ${t.snapBox}`}
+                             style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.02))' }}>
+                          
+                          <div className="relative overflow-hidden w-[70vw] max-w-[280px] aspect-[4/3] rounded-2xl bg-zinc-900 shadow-inner">
+                            <img src={msg.image} alt="Live Snap" className="w-full h-full object-cover rounded-2xl transform group-hover:scale-105 transition-transform duration-500" />
+                            
+                            {/* JAM & CENTANG DI POJOK KANAN ATAS (Agar tulisan watermark tidak tertutup) */}
+                            <div className="absolute top-3 right-3 px-3 py-1.5 bg-black/60 backdrop-blur-md border border-white/15 rounded-full flex items-center gap-1.5 shadow-lg">
+                              <span className="text-[11px] text-white/90 font-medium tracking-wide">{jam}</span>
+                              {msg.sender === "me" && msg.status && (
+                                <CheckCheck size={14} className={msg.status === "read" ? "text-cyan-400" : "text-white/60"} />
+                              )}
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
 
-                    {/* Pesan Suara (Voice Note) */}
-                    {msg.type === "audio" && (
-                      <div onPointerDown={() => { if(msg.sender === "me") setActiveMessageId(msg.id); }} className={`relative p-2 sm:p-3 rounded-2xl backdrop-blur-md border cursor-pointer select-none ${msg.sender === "me" ? `rounded-tr-none ${t.msgMe}` : `rounded-tl-none ${t.msgStranger}`}`}>
-                        <audio controls src={msg.audio} className="h-10 w-[60vw] max-w-[260px] outline-none" />
-                        {msg.sender === "me" && activeMessageId === msg.id && (
-                          <motion.button onClick={(e) => { e.stopPropagation(); handleUnsend(msg.id); setActiveMessageId(null); }} className="absolute -top-3 -left-3 w-8 h-8 flex items-center justify-center rounded-full bg-rose-500 text-white shadow-lg z-20">
-                            <Trash2 size={14} />
-                          </motion.button>
-                        )}
-                      </div>
-                    )}
-                  </motion.div>
-                ))}
+                      {/* Pesan Suara (Voice Note) */}
+                      {msg.type === "audio" && (
+                        <div onPointerDown={() => { if(msg.sender === "me") setActiveMessageId(msg.id); }} className={`relative p-2 sm:p-3 rounded-2xl backdrop-blur-md border cursor-pointer select-none ${msg.sender === "me" ? `rounded-tr-none ${t.msgMe}` : `rounded-tl-none ${t.msgStranger}`}`}>
+                          <div className="flex flex-col gap-1">
+                            <audio controls src={msg.audio} className="h-10 w-[60vw] max-w-[260px] outline-none" />
+                            
+                            <div className="flex items-center justify-end gap-1 px-1">
+                              <span className="text-[10px] opacity-60 font-medium">{jam}</span>
+                              {msg.sender === "me" && msg.status && (
+                                <CheckCheck size={14} className={msg.status === "read" ? "text-blue-500" : "text-zinc-400"} />
+                              )}
+                            </div>
+                          </div>
+                          {msg.sender === "me" && activeMessageId === msg.id && (
+                            <motion.button onClick={(e) => { e.stopPropagation(); handleUnsend(msg.id); setActiveMessageId(null); }} className="absolute -top-3 -left-3 w-8 h-8 flex items-center justify-center rounded-full bg-rose-500 text-white shadow-lg z-20">
+                              <Trash2 size={14} />
+                            </motion.button>
+                          )}
+                        </div>
+                      )}
+                    </motion.div>
+                  );
+                })}
 
                 {/* ANIMASI RUANG TUNGGU INTERAKTIF KETIKA MENCARI */}
                 {connectionStatus === "searching" && (
@@ -496,11 +557,19 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
                   </motion.div>
                 )}
 
+                {/* --- TAMPILAN LAWAN SEDANG MENGETIK --- */}
+                {isTyping && connectionStatus === "connected" && (
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className={`flex justify-start group`}>
+                    <div className={`relative px-5 py-3 rounded-2xl rounded-tl-none backdrop-blur-md border ${t.msgStranger} flex items-center gap-3`}>
+                      <span className="text-sm italic opacity-80">Lawan bicara sedang mengetik...</span>
+                    </div>
+                  </motion.div>
+                )}
               </AnimatePresence>
               <div ref={endOfMessagesRef} className="h-2 shrink-0" />
             </div>
 
-            {/* KOTAK INPUT PESAN (PB-6 / PB-4 Dinaikkan Sedikit & PR dilonggarkan) */}
+            {/* KOTAK INPUT PESAN */}
             <div className={`p-3 sm:p-4 pb-6 sm:pb-4 backdrop-blur-xl border-t z-20 shrink-0 ${t.inputArea}`}>
               <div className="flex items-center gap-2 sm:gap-3">
                 
@@ -514,14 +583,13 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
                   Stop
                 </motion.button>
                 
-                <form 
+                <form
                   onSubmit={(e) => {
                     e.preventDefault();
                     handleSend();
                   }}
                   className="relative flex-1 flex items-center min-w-0"
                 >
-                  {/* Papan Ketik di-padding lebih besar (pr-[110px]) agar tidak terhimpit icon */}
                   <input 
                     ref={inputRef}
                     type="text"
@@ -531,7 +599,7 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
                     style={{ WebkitUserSelect: "text", userSelect: "text", touchAction: "manipulation" }}
                     onTouchStart={(e) => e.stopPropagation()}
                     value={inputValue} 
-                    onChange={(e) => setInputValue(e.target.value)} 
+                    onChange={handleInputChange} 
                     placeholder="Ketik pesan..." 
                     className={`w-full border rounded-full py-3 pl-5 pr-[110px] sm:pr-[120px] focus:outline-none text-sm transition-all focus:ring-2 focus:ring-cyan-500/30 ${t.inputField}`} 
                   />
@@ -542,7 +610,7 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
                       <Camera size={18} />
                     </motion.button>
                     
-                    {/* ICON VOICE NOTE (MIC / STOP RECORD) */}
+                    {/* ICON VOICE NOTE */}
                     {isRecording ? (
                       <motion.button type="button" whileHover={{ scale: 1.1 }} onClick={stopRecording} className={`p-2 rounded-full text-rose-500 animate-pulse`}>
                         <Square size={18} fill="currentColor" />
@@ -628,7 +696,6 @@ function AboutPage({ onBack }: { onBack: () => void }) {
           </button>
         </div>
 
-        {/* KARTU DIKUNCI DI POJOK KIRI BAWAH SECARA ABSOLUT */}
         <div className="absolute bottom-6 left-6 sm:bottom-8 sm:left-8 w-[280px] pointer-events-auto">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="bg-black/70 backdrop-blur-[24px] border border-white/15 rounded-[1.5rem] p-5 w-full flex flex-col shadow-[0_0_40px_rgba(0,0,0,0.8)]">
             <div>
