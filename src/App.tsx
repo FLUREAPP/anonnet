@@ -458,11 +458,13 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
           </motion.button>
         </div>
 
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 flex items-center justify-center w-[300px] h-[100px]">
-  <Text3DFlip />
-</div>
+        {/* LOGO 3D HOLOGRAPHIC (Dinaikkan ke top-2 agar tidak mentok) */}
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30 flex items-center justify-center w-[280px] h-[70px]">
+          <Text3DFlip />
+        </div>
 
-        <motion.div initial={{ opacity: 0, y: 40, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={springConfig} className="relative z-20 w-full max-w-3xl h-[75vh] sm:h-[80vh] max-h-[800px] mt-12 flex flex-col items-center mx-4 gap-4">
+        {/* KOTAK CHAT UTAMA (Diberi margin-top mt-16 agar tidak menabrak logo) */}
+        <motion.div initial={{ opacity: 0, y: 40, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={springConfig} className="relative z-20 w-full max-w-3xl h-[75vh] sm:h-[80vh] max-h-[800px] mt-16 flex flex-col items-center mx-4 gap-4">
           <div ref={cardRef} className={`relative w-full flex flex-col flex-1 min-h-0 overflow-hidden backdrop-blur-xl border rounded-3xl ${t.chatCard}`}>
             <div className={`px-6 py-4 border-b flex justify-between items-center z-10 shrink-0 ${t.chatHeader}`}>
               <div>
