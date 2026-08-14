@@ -428,43 +428,42 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
   };
 
   return (
-    <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={`p-[1.5%] font-sans overflow-hidden transition-colors duration-700 ${t.bg}`}>
-      <div className="relative isolate w-full min-h-[calc(100svh-3vh)] flex items-center justify-center">
+    <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={`p-2 sm:p-[1.5%] font-sans overflow-x-hidden transition-colors duration-700 ${t.bg}`}>
+      <div className="relative isolate w-full min-h-[calc(100svh-2rem)] flex flex-col items-center justify-start pt-3 sm:pt-4">
         
         {/* Latar Belakang Magnetic Dots */}
-        <div className="absolute inset-0 overflow-hidden rounded-[32px] sm:rounded-[40px]">
-          
+        <div className="absolute inset-0 overflow-hidden rounded-[24px] sm:rounded-[40px] pointer-events-none">
           <div className={`absolute inset-0 w-full h-full transition-opacity duration-700 ${isDarkMode ? 'opacity-40' : 'opacity-100'}`}>
             <MagneticDots dotColor={isDarkMode ? "rgba(255, 255, 255, 0.4)" : "rgba(0, 0, 0, 0.4)"} />
           </div>
-
           <div className="pointer-events-none absolute inset-0 transition-colors duration-700">
             <div className={`absolute inset-0 transition-colors duration-700 bg-gradient-to-b ${t.gradient1}`} />
             <div className={`absolute inset-0 transition-colors duration-700 ${t.gradient2}`} />
           </div>
         </div>
 
-        {/* POJOK KANAN ATAS: INDIKATOR ONLINE & TEMA */}
-        <div className="absolute right-4 top-4 z-30 flex items-center gap-2 sm:gap-3">
-          <div className={`flex items-center justify-center gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-full border backdrop-blur-md shadow-lg ${t.contactBtn}`}>
-            <span className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]"></span>
-            <span className="text-xs sm:text-sm font-semibold tracking-wide">
-              {onlineCount} <span className="hidden sm:inline">Orang Asli</span> Online
-            </span>
+        {/* HEADER UTAMA: Logo di Kiri/Tengah & Tombol Online/Tema di Kanan (Fleksibel & Aman) */}
+        <div className="relative z-30 w-full max-w-3xl flex items-center justify-between px-3 sm:px-4 mb-3 shrink-0">
+          <div className="flex items-center justify-start w-[160px] sm:w-[220px] h-[45px]">
+            <Text3DFlip />
           </div>
 
-          <motion.button onClick={() => setIsDarkMode(!isDarkMode)} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} className={`flex items-center justify-center rounded-full border backdrop-blur-md w-10 h-10 shadow-lg ${t.contactBtn}`}>
-            {isDarkMode ? <Sun size={18} className={t.themeToggleIcon} /> : <Moon size={18} className={t.themeToggleIcon} />}
-          </motion.button>
+          <div className="flex items-center gap-2">
+            <div className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full border backdrop-blur-md shadow-lg ${t.contactBtn}`}>
+              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+              <span className="text-xs font-semibold tracking-wide">
+                {onlineCount} <span className="hidden sm:inline">Online</span>
+              </span>
+            </div>
+
+            <motion.button onClick={() => setIsDarkMode(!isDarkMode)} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} className={`flex items-center justify-center rounded-full border backdrop-blur-md w-9 h-9 shadow-lg ${t.contactBtn}`}>
+              {isDarkMode ? <Sun size={16} className={t.themeToggleIcon} /> : <Moon size={16} className={t.themeToggleIcon} />}
+            </motion.button>
+          </div>
         </div>
 
-        {/* LOGO 3D HOLOGRAPHIC (Dinaikkan ke top-2 agar tidak mentok) */}
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30 flex items-center justify-center w-[280px] h-[70px]">
-          <Text3DFlip />
-        </div>
-
-        {/* KOTAK CHAT UTAMA (Diberi margin-top mt-16 agar tidak menabrak logo) */}
-        <motion.div initial={{ opacity: 0, y: 40, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={springConfig} className="relative z-20 w-full max-w-3xl h-[75vh] sm:h-[80vh] max-h-[800px] mt-16 flex flex-col items-center mx-4 gap-4">
+        {/* KOTAK CHAT UTAMA (Murni statis di bawah header, tanpa tabrakan) */}
+        <motion.div initial={{ opacity: 0, y: 20, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={springConfig} className="relative z-20 w-full max-w-3xl h-[78vh] sm:h-[80vh] max-h-[800px] flex flex-col items-center mx-4 gap-4">
           <div ref={cardRef} className={`relative w-full flex flex-col flex-1 min-h-0 overflow-hidden backdrop-blur-xl border rounded-3xl ${t.chatCard}`}>
             <div className={`px-6 py-4 border-b flex justify-between items-center z-10 shrink-0 ${t.chatHeader}`}>
               <div>
