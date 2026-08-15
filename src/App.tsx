@@ -658,9 +658,8 @@ function AboutPage({ onBack }: { onBack: () => void }) {
                   </a>
                 </div>
                 
-                {/* Bagian Kanan: Tombol Donasi */}
-                {/* Nanti ganti tanda "#" di bawah ini dengan tautan platform donasimu (mis. Saweria) */}
-                <a href="#" target="_blank" rel="noopener noreferrer" className="shrink-0 relative z-10">
+                {/* Bagian Kanan: Tombol Donasi sudah diarahkan ke file donasi.html */}
+                <a href="/donasi.html" target="_blank" rel="noopener noreferrer" className="shrink-0 relative z-10">
                   <ShaderButton className="h-[42px] w-[90px] sm:w-[100px]">
                     Donasi
                   </ShaderButton>
