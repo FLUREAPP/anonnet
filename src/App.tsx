@@ -597,7 +597,7 @@ function AboutPage({ onBack }: { onBack: () => void }) {
           </button>
         </div>
 
-        <div className="absolute bottom-6 left-6 sm:bottom-8 sm:left-8 w-[280px] pointer-events-auto">
+        <div className="absolute bottom-6 left-6 sm:bottom-8 sm:left-8 w-[320px] max-w-[calc(100vw-48px)] pointer-events-auto">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="bg-black/70 backdrop-blur-[24px] border border-white/15 rounded-[1.5rem] p-5 w-full flex flex-col shadow-[0_0_40px_rgba(0,0,0,0.8)]">
             <div>
               <h3 className="text-[10px] uppercase tracking-widest text-zinc-400 mb-1 font-semibold font-sans">
@@ -643,35 +643,33 @@ function AboutPage({ onBack }: { onBack: () => void }) {
               </a>
             </div>
 
-            <div className="pt-3 border-t border-white/15 flex flex-col w-full">
-              <h3 className="text-xs font-semibold text-white mb-1 font-sans">Quick Links</h3>
-              <a href="https://hse-excellence.preview.emergentagent.com/?utm_source=ig&utm_medium=social&utm_content=link_in_bio&fbclid=PAdGRleATkZpRwZG9mAmZkaWQWUMEIfuO1bv5l2HjDQsQKeAqEC98_TmV4dG4DYWVtAjExAHNydGMGYXBwX2lkDzEyNDAyNDU3NDI4NzQxNAABp9El3Gf_4voYhtukfXcKwRpvbv8C_DfMwvrzbLlWo91YXzJZ5bpSeHMR917c_aem_hDK_tOhJ4l1rt8eVnOsGIQ" target="_blank" rel="noopener noreferrer" className="text-zinc-300 hover:text-white transition-colors text-xs font-sans font-medium">
-                Portfolio
-              </a>
+            {/* SEKSI QUICK LINKS & DONASI YANG SUDAH DISATUKAN */}
+            <div className="pt-4 border-t border-white/15 flex flex-col w-full">
+              <p className="text-[10px] text-zinc-300 font-sans leading-relaxed mb-4">
+                Bagi siapapun yang ingin membantu developer terus membangun <b className="text-white">Anonnect</b>, setiap dukunganmu sangat berarti!
+              </p>
+              
+              <div className="flex items-center justify-between w-full">
+                {/* Bagian Kiri: Link Portofolio */}
+                <div className="flex flex-col">
+                  <h3 className="text-xs font-semibold text-white mb-1.5 font-sans">Quick Links</h3>
+                  <a href="https://hse-excellence.preview.emergentagent.com/?utm_source=ig&utm_medium=social&utm_content=link_in_bio&fbclid=PAdGRleATkZpRwZG9mAmZkaWQWUMEIfuO1bv5l2HjDQsQKeAqEC98_TmV4dG4DYWVtAjExAHNydGMGYXBwX2lkDzEyNDAyNDU3NDI4NzQxNAABp9El3Gf_4voYhtukfXcKwRpvbv8C_DfMwvrzbLlWo91YXzJZ5bpSeHMR917c_aem_hDK_tOhJ4l1rt8eVnOsGIQ" target="_blank" rel="noopener noreferrer" className="text-zinc-300 hover:text-white transition-colors text-xs font-sans font-medium w-max relative z-10">
+                    Portfolio
+                  </a>
+                </div>
+                
+                {/* Bagian Kanan: Tombol Donasi */}
+                {/* Nanti ganti tanda "#" di bawah ini dengan tautan platform donasimu (mis. Saweria) */}
+                <a href="#" target="_blank" rel="noopener noreferrer" className="shrink-0 relative z-10">
+                  <ShaderButton className="h-[42px] w-[90px] sm:w-[100px]">
+                    Donasi
+                  </ShaderButton>
+                </a>
+              </div>
             </div>
+
           </motion.div>
         </div>
-
-        {/* KARTU DONASI (KANAN BAWAH) */}
-        <div className="absolute bottom-6 right-6 sm:bottom-8 sm:right-8 pointer-events-auto">
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }} 
-            animate={{ opacity: 1, y: 0 }} 
-            transition={{ duration: 0.6, delay: 0.3 }} 
-            className="bg-black/70 backdrop-blur-[24px] border border-white/15 rounded-[1.2rem] p-4 w-[160px] flex flex-col items-center shadow-[0_0_40px_rgba(0,0,0,0.8)]"
-          >
-            <p className="text-[10px] text-zinc-300 font-sans text-center leading-relaxed mb-4">
-              Bagi siapapun yang ingin membantu developer terus membangun <b>Anonnect</b>, setiap dukunganmu sangat berarti!
-            </p>
-            
-            {/* Tombol Donasi ukuran PLEK KETIPLEK dengan tombol Next */}
-            <ShaderButton className="h-[42px] w-[80px] sm:w-[100px]">
-              Donasi
-            </ShaderButton>
-            
-          </motion.div>
-        </div>
-
       </div>
     </div>
   );
