@@ -651,6 +651,27 @@ function AboutPage({ onBack }: { onBack: () => void }) {
             </div>
           </motion.div>
         </div>
+
+        {/* KARTU DONASI (KANAN BAWAH) */}
+        <div className="absolute bottom-6 right-6 sm:bottom-8 sm:right-8 pointer-events-auto">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }} 
+            animate={{ opacity: 1, y: 0 }} 
+            transition={{ duration: 0.6, delay: 0.3 }} 
+            className="bg-black/70 backdrop-blur-[24px] border border-white/15 rounded-[1.2rem] p-4 w-[160px] flex flex-col items-center shadow-[0_0_40px_rgba(0,0,0,0.8)]"
+          >
+            <p className="text-[10px] text-zinc-300 font-sans text-center leading-relaxed mb-4">
+              Bagi siapapun yang ingin membantu developer terus membangun <b>Anonnect</b>, setiap dukunganmu sangat berarti!
+            </p>
+            
+            {/* Tombol Donasi ukuran PLEK KETIPLEK dengan tombol Next */}
+            <ShaderButton className="h-[42px] w-[80px] sm:w-[100px]">
+              Donasi
+            </ShaderButton>
+            
+          </motion.div>
+        </div>
+
       </div>
     </div>
   );
