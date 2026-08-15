@@ -3,16 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useRef, useState, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react"; // atau "framer-motion" jika Anda menggunakan itu
+import { useRef, useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion"; // Pastikan pakai framer-motion atau motion/react sesuai package.json Anda
 import { ArrowRight, MapPin, Mail, Instagram, Linkedin } from "lucide-react";
 import AsciiImage from "./components/AsciiImage";
 
-// KITA IMPORT CHAT INTERFACE YANG BARU DARI FOLDER COMPONENTS
+// Import komponen ChatInterface baru Anda
 import ChatInterface from "./components/ChatInterface";
 
 const words = ["rahasia", "anonim", "aman", "terjaga"];
 
+/* -------------------------------------------------------------------------- */
+/*  Sub-komponen: BlurWord                                                    */
+/* -------------------------------------------------------------------------- */
 function BlurWord({ word, trigger }: { word: string; trigger: number }) {
   const letters = word.split("");
   const STAGGER = 45;
@@ -41,7 +44,7 @@ function BlurWord({ word, trigger }: { word: string; trigger: number }) {
         const tick = (now: number) => {
           const progress = Math.min((now - start) / DURATION, 1);
           const eased = 1 - Math.pow(1 - progress, 3);
-          setLetterStates(prev => {
+          setLetterStates((prev) => {
             const next = [...prev];
             next[i] = { opacity: eased, blur: 20 * (1 - eased) };
             return next;
@@ -107,7 +110,10 @@ function BlurWord({ word, trigger }: { word: string; trigger: number }) {
   );
 }
 
-function ShaderButton({ children, onClick, className = "h-11 w-32" }: { children: React.ReactNode, onClick?: () => void, className?: string }) {
+/* -------------------------------------------------------------------------- */
+/*  Sub-komponen: ShaderButton                                                */
+/* -------------------------------------------------------------------------- */
+function ShaderButton({ children, onClick, className = "h-11 w-32" }: { children: React.ReactNode; onClick?: () => void; className?: string }) {
   return (
     <button
       type="button"
@@ -118,7 +124,7 @@ function ShaderButton({ children, onClick, className = "h-11 w-32" }: { children
         animate={{ rotate: 360 }}
         transition={{ repeat: Infinity, duration: 3, ease: "linear" }}
         className="absolute z-0 bg-[conic-gradient(from_90deg_at_50%_50%,#18181b_0%,#ffffff_50%,#18181b_100%)]"
-        style={{ width: '400%', height: '400%', top: '-150%', left: '-150%' }}
+        style={{ width: "400%", height: "400%", top: "-150%", left: "-150%" }}
       />
       <span className="relative z-10 inline-flex h-full w-full cursor-pointer items-center justify-center rounded-full bg-[#09090b] text-sm font-medium text-zinc-200 transition-colors hover:bg-[#18181b] tracking-wide">
         {children}
@@ -127,15 +133,15 @@ function ShaderButton({ children, onClick, className = "h-11 w-32" }: { children
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Halaman: Landing Page                                                     */
+/* -------------------------------------------------------------------------- */
 function LandingPage({ onStart }: { onStart: () => void }) {
   const [isVisible, setIsVisible] = useState(false);
   const [wordIndex, setWordIndex] = useState(0);
 
   useEffect(() => {
     setIsVisible(true);
-  }, []);
-
-  useEffect(() => {
     const interval = setInterval(() => {
       setWordIndex((prev) => (prev + 1) % words.length);
     }, 2500);
@@ -192,6 +198,9 @@ function LandingPage({ onStart }: { onStart: () => void }) {
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Sub-komponen: GradientBackground (Untuk halaman About)                    */
+/* -------------------------------------------------------------------------- */
 function GradientBackground() {
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none -z-20 bg-black">
@@ -201,29 +210,50 @@ function GradientBackground() {
         </filter>
         <rect width="100%" height="100%" filter="url(#noiseFilter)" />
       </svg>
-      <motion.div animate={{ scale: [1, 1.1, 1], x: ["0%", "5%", "0%"], y: ["0%", "-5%", "0%"] }} transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }} className="absolute -bottom-[20%] -left-[10%] w-[75vw] h-[75vh] rounded-full bg-[#0ea5e9]/50 blur-[120px]" />
-      <motion.div animate={{ scale: [1, 1.15, 1], x: ["0%", "-5%", "0%"], y: ["0%", "5%", "0%"] }} transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }} className="absolute -top-[10%] -right-[10%] w-[65vw] h-[65vh] rounded-full bg-[#38bdf8]/40 blur-[100px]" />
+      <motion.div
+        animate={{ scale: [1, 1.1, 1], x: ["0%", "5%", "0%"], y: ["0%", "-5%", "0%"] }}
+        transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
+        className="absolute -bottom-[20%] -left-[10%] w-[75vw] h-[75vh] rounded-full bg-[#0ea5e9]/50 blur-[120px]"
+      />
+      <motion.div
+        animate={{ scale: [1, 1.15, 1], x: ["0%", "-5%", "0%"], y: ["0%", "5%", "0%"] }}
+        transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
+        className="absolute -top-[10%] -right-[10%] w-[65vw] h-[65vh] rounded-full bg-[#38bdf8]/40 blur-[100px]"
+      />
     </div>
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Halaman: About Page                                                       */
+/* -------------------------------------------------------------------------- */
 function AboutPage({ onBack }: { onBack: () => void }) {
   return (
     <div className="min-h-[100svh] w-full text-white overflow-hidden selection:bg-white/20 relative flex z-0">
       <GradientBackground />
       <div className="absolute inset-0 z-0 opacity-80 pointer-events-auto">
+        {/* Pastikan file AsciiImage ada di src/components/AsciiImage.tsx */}
         <AsciiImage />
       </div>
 
       <div className="absolute inset-0 z-10 p-6 sm:p-10 pointer-events-none flex flex-col justify-between">
         <div className="w-full flex items-start">
-          <button onClick={onBack} className="pointer-events-auto p-3 rounded-full bg-black/40 hover:bg-black/60 border border-white/10 transition-colors text-zinc-300 hover:text-white backdrop-blur-md shadow-lg">
+          <button
+            type="button"
+            onClick={onBack}
+            className="pointer-events-auto p-3 rounded-full bg-black/40 hover:bg-black/60 border border-white/10 transition-colors text-zinc-300 hover:text-white backdrop-blur-md shadow-lg"
+          >
             <ArrowRight className="w-5 h-5 sm:w-6 sm:h-6 rotate-180" />
           </button>
         </div>
 
         <div className="absolute bottom-6 left-6 sm:bottom-8 sm:left-8 w-[320px] max-w-[calc(100vw-48px)] pointer-events-auto">
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="bg-black/70 backdrop-blur-[24px] border border-white/15 rounded-[1.5rem] p-5 w-full flex flex-col shadow-[0_0_40px_rgba(0,0,0,0.8)]">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="bg-black/70 backdrop-blur-[24px] border border-white/15 rounded-[1.5rem] p-5 w-full flex flex-col shadow-[0_0_40px_rgba(0,0,0,0.8)]"
+          >
             <div>
               <h3 className="text-[10px] uppercase tracking-widest text-zinc-400 mb-1 font-semibold font-sans">
                 ABOUT DEVELOPER
@@ -297,6 +327,9 @@ function AboutPage({ onBack }: { onBack: () => void }) {
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Komponen Induk Utama: App                                                 */
+/* -------------------------------------------------------------------------- */
 type Page = "landing" | "chat" | "about";
 
 export default function App() {
@@ -311,7 +344,7 @@ export default function App() {
       )}
       {currentPage === "chat" && (
         <motion.div key="chat" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-          {/* MEMANGGIL KOMPONEN CHATINTERFACE DARI FOLDER COMPONENTS */}
+          {/* Memanggil komponen ChatInterface yang ada di folder src/components */}
           <ChatInterface onNavigateToAbout={() => setCurrentPage("about")} />
         </motion.div>
       )}
