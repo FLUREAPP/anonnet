@@ -508,28 +508,34 @@ function ChatInterface({ onGoToAbout }: { onGoToAbout: () => void }) {
             <div ref={endOfMessagesRef} className="h-2 shrink-0" />
           </div>
 
-          <div className="chat-input">
-            <button type="button" onClick={handleStopChat} className="btn btn-ghost hover:text-rose-400 hover:border-rose-400/50 transition-colors">Stop</button>
+          
+            <div className="chat-input flex w-full gap-2 overflow-hidden items-center">
+            <button type="button" onClick={handleStopChat} className="btn btn-ghost hover:text-rose-400 hover:border-rose-400/50 transition-colors shrink-0">
+              Stop
+            </button>
             
-            <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="input-field">
+            <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="input-field flex-1 min-w-0 flex items-center">
               <input 
                 ref={inputRef}
                 type="text" 
                 placeholder="Ketik pesan..." 
                 value={inputValue}
                 onChange={handleInputChange}
+                className="w-full min-w-0 bg-transparent outline-none"
               />
-              <div className="mini-icon" onClick={openCamera}>
+              <div className="mini-icon shrink-0" onClick={openCamera}>
                 <Camera size={18} />
               </div>
-              <div className="mini-icon" onClick={isRecording ? stopRecording : startRecording} style={{ color: isRecording ? '#ef4444' : '' }}>
+              <div className="mini-icon shrink-0" onClick={isRecording ? stopRecording : startRecording} style={{ color: isRecording ? '#ef4444' : '' }}>
                 {isRecording ? <Square size={18} className="animate-pulse" /> : <Mic size={18} />}
               </div>
             </form>
             
-            <ShaderButton onClick={handleNextPerson} className="h-[42px] w-[100px]">
-  Next
-</ShaderButton>
+            <div className="shrink-0">
+              <ShaderButton onClick={handleNextPerson} className="h-[42px] w-[80px] sm:w-[100px]">
+                Next
+              </ShaderButton>
+            </div>
           </div>
         </div>
 
