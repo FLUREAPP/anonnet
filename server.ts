@@ -29,30 +29,16 @@ async function startServer() {
     const socket = rawSocket as CustomSocket;
     console.log('Client connected:', socket.id);
 
-   // --- MULAI PASTE DARI SINI ---
-  
-  // 1. Tambah jumlah user asli (Tetap pakai variabel Bos)
-  onlineUsersCount++;
+    // 1. Tambah jumlah user asli
+    onlineUsersCount++;
 
-  // 2. Terapkan Trik Pemancing Angka (Tambah 49 jika ada minimal 1 user)
-  let angkaPemancing = onlineUsersCount >= 1 ? onlineUsersCount + 49 : 0;
+    // 2. Terapkan Trik Pemancing Angka (Tambah 49 jika ada minimal 1 user)
+    let angkaPemancing = onlineUsersCount >= 1 ? onlineUsersCount + 49 : 0;
+    io.emit('online_count', angkaPemancing);
 
-  // 3. Kirim angka palsu tersebut ke klien (Tetap pakai event 'online_count' milik Bos)
-  io.emit('online_count', angkaPemancing);
-
-
-  // 4. Tambahkan fitur "Sedang mengetik..." persis di bawah sini
-  socket.on('typing', () => {
-    socket.broadcast.emit('lawan_sedang_mengetik');
-  });
-
-  socket.on('stop_typing', () => {
-    socket.broadcast.emit('lawan_berhenti_mengetik');
-  });
-  
-  // --- SAMPAI SINI ---
-
-    // 1. FIND PARTNER / NEXT
+    // =========================================================================
+    // 1. FIND PARTNER / MATCHMAKING
+    // =========================================================================
     socket.on('find_partner', () => {
       // Leave previous room if any
       if (socket.room) {
@@ -83,17 +69,14 @@ async function startServer() {
       } else {
         waitingUser = socket;
         socket.emit('waiting');
-
-        // BOT DIBUANG DARI SINI: Tidak ada lagi setTimeout untuk memanggil bot.
-        // Pengguna akan murni menunggu sampai ada manusia asli yang terhubung.
       }
     });
 
-    // 2. SEND MESSAGE / LIVE SNAP
+    // =========================================================================
+    // 2. CHAT & TYPING INDICATOR
+    // =========================================================================
     socket.on('send_message', (messageData: any) => {
       if (!socket.room) return;
-
-      // BOT DIBUANG DARI SINI: Pesan murni hanya diteruskan ke partner asli
       const partnerData = {
         ...messageData,
         sender: "stranger"
@@ -101,14 +84,58 @@ async function startServer() {
       socket.to(socket.room).emit('receive_message', partnerData);
     });
 
-    // 3. UNSEND MESSAGE
     socket.on('unsend_message', (messageId: number | string) => {
       if (socket.room && !socket.isBotPartner) {
         socket.to(socket.room).emit('delete_message', messageId);
       }
     });
 
-    // 4. STOP CHAT / DISCONNECT
+    // BUG FIXED: Menggunakan socket.to(socket.room) agar tidak nyasar ke orang lain
+    socket.on('typing', () => {
+      if (socket.room) socket.to(socket.room).emit('lawan_sedang_mengetik');
+    });
+
+    socket.on('stop_typing', () => {
+      if (socket.room) socket.to(socket.room).emit('lawan_berhenti_mengetik');
+    });
+
+    // =========================================================================
+    // 3. ✦ FITUR BARU CLAUDE: READ RECEIPTS (CENTANG BIRU)
+    // =========================================================================
+    socket.on('mark_delivered', (msgId) => {
+      if (socket.room) socket.to(socket.room).emit('message_delivered', msgId);
+    });
+
+    socket.on('mark_read', (msgId) => {
+      if (socket.room) socket.to(socket.room).emit('message_read', msgId);
+    });
+
+    // =========================================================================
+    // 4. ✦ FITUR BARU CLAUDE: VOICE CALL (WebRTC)
+    // =========================================================================
+    socket.on('call_offer', (data) => {
+      if (socket.room) socket.to(socket.room).emit('call_offer', data);
+    });
+
+    socket.on('call_answer', (data) => {
+      if (socket.room) socket.to(socket.room).emit('call_answer', data);
+    });
+
+    socket.on('ice_candidate', (data) => {
+      if (socket.room) socket.to(socket.room).emit('ice_candidate', data);
+    });
+
+    socket.on('call_declined', () => {
+      if (socket.room) socket.to(socket.room).emit('call_declined');
+    });
+
+    socket.on('call_ended', () => {
+      if (socket.room) socket.to(socket.room).emit('call_ended');
+    });
+
+    // =========================================================================
+    // 5. STOP CHAT / DISCONNECT
+    // =========================================================================
     const handleDisconnect = () => {
       if (waitingUser === socket) {
         waitingUser = null;
@@ -126,11 +153,9 @@ async function startServer() {
     socket.on('stop_chat', handleDisconnect);
     
     socket.on('disconnect', () => {
-// --- MULAI PASTE UNTUK DISCONNECT ---
-    onlineUsersCount = Math.max(0, onlineUsersCount - 1);
-    let angkaBaru = onlineUsersCount >= 1 ? onlineUsersCount + 49 : 0;
-    io.emit('online_count', angkaBaru);
-    // --- SAMPAI SINI ---
+      onlineUsersCount = Math.max(0, onlineUsersCount - 1);
+      let angkaBaru = onlineUsersCount >= 1 ? onlineUsersCount + 49 : 0;
+      io.emit('online_count', angkaBaru);
       
       handleDisconnect();
     });
