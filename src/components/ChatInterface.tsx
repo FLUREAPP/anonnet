@@ -850,9 +850,12 @@ export default function ChatInterface({ onNavigateToAbout }) {
         {/* Header */}
         <header className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-slate-200/80 dark:border-slate-800/80 bg-white/80 dark:bg-[#0B0F19]/80 backdrop-blur-md sticky top-0 z-20">
           <div className="flex items-center gap-2.5">
-            <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500 to-violet-600 shadow-lg shadow-violet-500/20">
-              <Radar size={18} className="text-white" />
-            </div>
+            {/* INI BAGIAN LOGO HEADER YANG DIGANTI */}
+            <img 
+              src="/anonnect-logo.svg" 
+              alt="Anonnect Logo" 
+              className="relative flex h-9 w-9 rounded-xl shadow-lg shadow-violet-500/20 object-cover" 
+            />
             <div>
               <h1 className="text-base font-bold tracking-tight bg-gradient-to-r from-cyan-500 to-violet-600 bg-clip-text text-transparent">
                 Anonnect
