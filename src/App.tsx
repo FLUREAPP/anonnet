@@ -4,12 +4,11 @@
  */
 
 import { useRef, useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion"; // Pastikan pakai framer-motion atau motion/react sesuai package.json Anda
+import { motion, AnimatePresence } from "framer-motion";
 import { ArrowRight, MapPin, Mail, Instagram, Linkedin } from "lucide-react";
 import AsciiImage from "./components/AsciiImage";
-
-// Import komponen ChatInterface baru Anda
 import ChatInterface from "./components/ChatInterface";
+import { socket } from "./components/socket";
 
 const words = ["rahasia", "anonim", "aman", "terjaga"];
 
@@ -232,7 +231,6 @@ function AboutPage({ onBack }: { onBack: () => void }) {
     <div className="min-h-[100svh] w-full text-white overflow-hidden selection:bg-white/20 relative flex z-0">
       <GradientBackground />
       <div className="absolute inset-0 z-0 opacity-80 pointer-events-auto">
-        {/* Pastikan file AsciiImage ada di src/components/AsciiImage.tsx */}
         <AsciiImage />
       </div>
 
@@ -273,17 +271,8 @@ function AboutPage({ onBack }: { onBack: () => void }) {
               </div>
               <div className="flex items-center gap-2.5">
                 <Mail className="w-3.5 h-3.5 text-zinc-300 shrink-0" />
-                <a href="mailto:rizkymahreza@icloud.com" className="hover:text-white transition-colors truncate">
-                  rizkymahreza@icloud.com
-                </a>
-              </div>
-              <div className="flex items-center gap-2.5">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5 text-zinc-300 shrink-0">
-                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
-                  <path d="M12 21.5c-1.666 0-3.26-.43-4.663-1.214L3 21l.732-4.14A9.458 9.458 0 0 1 2.5 12c0-5.247 4.253-9.5 9.5-9.5s9.5 4.253 9.5 9.5-4.253 9.5-9.5 9.5z" />
-                </svg>
-                <a href="https://wa.me/13312207673" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">
-                  +1 (331)-220-7673
+                <a href="mailto:rizkymahreza@anonnect.space" className="hover:text-white transition-colors truncate">
+                  rizkymahreza@anonnect.space
                 </a>
               </div>
             </div>
@@ -311,7 +300,6 @@ function AboutPage({ onBack }: { onBack: () => void }) {
                   </a>
                 </div>
                 
-                {/* Tautan ke halaman Donasi Statis */}
                 <a href="/donasi.html" target="_blank" rel="noopener noreferrer" className="shrink-0 relative z-10">
                   <ShaderButton className="h-[42px] w-[90px] sm:w-[100px]">
                     Donasi
@@ -335,6 +323,13 @@ type Page = "landing" | "chat" | "about";
 export default function App() {
   const [currentPage, setCurrentPage] = useState<Page>("landing");
 
+  useEffect(() => {
+    socket.connect();
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
+
   return (
     <AnimatePresence mode="wait">
       {currentPage === "landing" && (
@@ -344,7 +339,6 @@ export default function App() {
       )}
       {currentPage === "chat" && (
         <motion.div key="chat" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-          {/* Memanggil komponen ChatInterface yang ada di folder src/components */}
           <ChatInterface onNavigateToAbout={() => setCurrentPage("about")} />
         </motion.div>
       )}

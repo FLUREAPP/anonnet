@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { io } from "socket.io-client";
+
 import {
   Sun,
   Moon,
@@ -15,7 +15,6 @@ import {
   Play,
   Pause,
   RotateCcw,
-  Radar,
   Info,
   Square,
   Check,
@@ -23,113 +22,142 @@ import {
   Phone,
   PhoneIncoming,
   MicOff,
+  Globe,
 } from "lucide-react";
+import { translations, type Lang } from "./i18n";
+import { socket } from "./socket";
 
 /**
  * ============================================================================
  *  ANONNECT — ChatInterface
  * ============================================================================
- *  Kontrak Socket.IO (event tambahan untuk fitur baru ditandai ✦):
+ *  Kontrak Socket.IO (event tambahan ditandai ✦):
  *
  *  EMIT (client -> server)
- *    "find_partner"                    -> cari partner baru
- *    "send_message"    (msg)           -> kirim pesan (text/snap/audio)
- *    "typing" / "stop_typing"
- *    "unsend_message"  (id)
- *    "stop_chat"
- *  ✦ "mark_delivered" (msgId)          -> beri tahu server pesan sudah sampai di device kita
- *  ✦ "mark_read"       (msgId)         -> beri tahu server pesan sudah kita baca
- *  ✦ "call_offer"      { offer }       -> mulai voice call (SDP offer)
- *  ✦ "call_answer"     { answer }      -> jawab voice call (SDP answer)
- *  ✦ "ice_candidate"   { candidate }   -> tukar ICE candidate WebRTC
- *  ✦ "call_declined"                   -> tolak panggilan masuk
- *  ✦ "call_ended"                      -> akhiri panggilan yang sedang berlangsung
+ *    "find_partner" | "send_message" (msg) | "typing" | "stop_typing"
+ *    "unsend_message" (id) | "stop_chat"
+ *  ✦ "mark_delivered" (msgId) | "mark_read" (msgId)
+ *  ✦ "call_offer" {offer} | "call_answer" {answer} | "ice_candidate" {candidate}
+ *  ✦ "call_declined" | "call_ended"
  *
  *  ON (server -> client)
- *    "online_count"        (number)
- *    "waiting"                         -> mulai mencari partner
- *    "connected"            { isBot }  -> partner ditemukan
- *    "receive_message"      (msg)
- *    "delete_message"       (id)
- *    "partner_disconnected"
- *    "lawan_sedang_mengetik" / "lawan_berhenti_mengetik"
- *  ✦ "partner_online" / "partner_offline"   -> presence real-time partner
- *  ✦ "message_delivered"  (msgId)           -> pesan kita sudah sampai   → centang 2 abu
- *  ✦ "message_read"       (msgId)           -> pesan kita sudah dibaca  → centang 2 biru
- *  ✦ "call_offer"         { offer }         -> menerima panggilan masuk
- *  ✦ "call_answer"        { answer }
- *  ✦ "ice_candidate"      { candidate }
- *  ✦ "call_declined" / "call_ended"
+ *    "online_count" (number) | "waiting" | "connected"
+ *    "receive_message" (msg) | "delete_message" (id) | "partner_disconnected"
+ *    "lawan_sedang_mengetik" | "lawan_berhenti_mengetik"
+ *  ✦ "partner_online" | "partner_offline"
+ *  ✦ "message_delivered" (msgId) | "message_read" (msgId)
+ *  ✦ "call_offer" {offer} | "call_answer" {answer} | "ice_candidate" {candidate}
+ *  ✦ "call_declined" | "call_ended"
+ *
+ * ⚠️ PENTING — VOICE NOTE GAGAL TERKIRIM KE PARTNER (walau di HP kamu sendiri
+ * bisa play): audio dikirim sebagai base64 di dalam payload socket biasa.
+ * Base64 menambah ~33% ukuran file, dan Socket.IO server defaultnya membatasi
+ * payload ("maxHttpBufferSize") sekitar 1MB. Rekaman yang agak panjang bisa
+ * melebihi itu dan GAGAL terkirim tanpa error yang kelihatan di frontend.
+ * Fix di server (Node.js):
+ *     const io = new Server(httpServer, { maxHttpBufferSize: 8e6 }); // 8MB
+ * Untuk solusi yang lebih scalable jangka panjang: upload audio ke storage
+ * (S3/Cloudinary/dst) lewat HTTP endpoint biasa, lalu kirim URL-nya saja
+ * lewat socket — bukan raw base64.
+ *
+ * ⚠️ PENTING — VOICE CALL TIDAK ADA SUARA: STUN publik SERINGKALI TIDAK CUKUP
+ * untuk banyak jaringan (NAT simetris, WiFi kantor/kampus, sebagian jaringan
+ * seluler). Tanpa TURN server, koneksi ICE bisa gagal total — UI akan bilang
+ * "in_call" padahal audio tidak pernah benar-benar mengalir. Isi ICE_SERVERS
+ * di bawah dengan TURN server kamu sendiri (coturn self-hosted, atau layanan
+ * seperti Twilio/Metered/Xirsys) untuk fix permanen.
  * ============================================================================
  */
 
-// 1. KONEKSI SOCKET MENGGUNAKAN LOGIKA ASLI ANDA
-const socket = io({ autoConnect: false });
+const ICE_SERVERS: RTCIceServer[] = [
+  { urls: "stun:stun.l.google.com:19302" },
+  // ✦ Tambahkan TURN server kamu di sini, WAJIB untuk produksi:
+  // { urls: "turn:your-turn-server.com:3478", username: "USERNAME", credential: "PASSWORD" },
+];
 
-const STATUS = {
-  searching: {
-    label: "Mencari Teman...",
-    dot: "bg-amber-400",
-  },
-  connected: {
-    label: "Terhubung",
-    dot: "bg-emerald-400",
-  },
-  disconnected: {
-    label: "Terputus",
-    dot: "bg-rose-500",
-  },
-};
+const MAX_RECORD_SECONDS = 120; // batas aman supaya payload base64 tidak meledak
 
-function formatTime(ts) {
-  const d = new Date(typeof ts === "number" && ts > 100000 ? ts : Date.now());
-  return d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+type ConnectionStatus = "searching" | "connected" | "disconnected";
+type CallStatus = "idle" | "calling" | "incoming" | "in_call";
+type MessageStatus = "sent" | "delivered" | "read";
+type MessageKind = "text" | "photo" | "snap" | "audio" | "voice";
+type Sender = "me" | "stranger";
+
+interface ChatMessage {
+  id: number;
+  sender: Sender;
+  type: MessageKind;
+  text?: string;
+  content?: string;
+  image?: string;
+  audio?: string;
+  duration?: number;
+  status?: MessageStatus;
+  unsent?: boolean;
+  timestamp?: number;
 }
 
-function formatDuration(sec) {
+const STATUS_DOT: Record<ConnectionStatus, string> = {
+  searching: "bg-amber-400",
+  connected: "bg-emerald-400",
+  disconnected: "bg-rose-500",
+};
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function formatTime(ts: number | undefined, lang: Lang = "id"): string {
+  const d = new Date(typeof ts === "number" && ts > 100000 ? ts : Date.now());
+  return d.toLocaleTimeString(lang === "en" ? "en-US" : "id-ID", { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatDuration(sec: number): string {
   const total = Math.max(0, Math.floor(sec || 0));
   const m = Math.floor(total / 60).toString().padStart(2, "0");
   const s = Math.floor(total % 60).toString().padStart(2, "0");
   return `${m}:${s}`;
 }
 
-function StatusDot({ status }) {
-  const s = STATUS[status];
+function StatusDot({ status }: { status: ConnectionStatus }) {
+  const dot = STATUS_DOT[status];
   return (
     <span className="relative flex h-2.5 w-2.5">
       {status === "searching" && (
         <motion.span
-          className={`absolute inline-flex h-full w-full rounded-full ${s.dot}`}
+          className={`absolute inline-flex h-full w-full rounded-full ${dot}`}
           animate={{ scale: [1, 2.4], opacity: [0.6, 0] }}
           transition={{ duration: 1.4, repeat: Infinity, ease: "easeOut" }}
         />
       )}
-      <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${s.dot}`} />
+      <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${dot}`} />
     </span>
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/*  Ikon centang status kirim (sent / delivered / read)                       */
-/* -------------------------------------------------------------------------- */
-function ReceiptTicks({ status }) {
-  if (status === "read") {
-    return <CheckCheck size={13} className="text-sky-500 dark:text-sky-400 shrink-0" />;
-  }
-  if (status === "delivered") {
-    return <CheckCheck size={13} className="text-slate-400 dark:text-slate-500 shrink-0" />;
-  }
+function ReceiptTicks({ status }: { status?: MessageStatus }) {
+  if (status === "read") return <CheckCheck size={13} className="text-sky-500 dark:text-sky-400 shrink-0" />;
+  if (status === "delivered") return <CheckCheck size={13} className="text-slate-400 dark:text-slate-500 shrink-0" />;
   return <Check size={13} className="text-slate-400 dark:text-slate-500 shrink-0" />;
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Pemutar voice note — sudah diperbaiki: mimeType eksplisit + label durasi  */
+/*  Pemutar voice note — mimeType eksplisit, durasi, dan error handling      */
 /* -------------------------------------------------------------------------- */
-function VoiceBubblePlayer({ src, isMe, duration: initialDuration }) {
-  const audioRef = useRef(null);
+interface VoiceBubblePlayerProps {
+  src: string;
+  isMe: boolean;
+  duration?: number;
+  lang: Lang;
+}
+
+function VoiceBubblePlayer({ src, isMe, duration: initialDuration, lang }: VoiceBubblePlayerProps) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(initialDuration || 0);
+  const [playError, setPlayError] = useState(false);
+  const tr = translations[lang] || translations.id;
 
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = 1;
@@ -145,18 +173,17 @@ function VoiceBubblePlayer({ src, isMe, duration: initialDuration }) {
         audio.currentTime = 0;
         setProgress(0);
       }
-      audio.play().catch(() => {
-        // Autoplay/permission edge-case — abaikan secara aman
-      });
+      audio
+        .play()
+        .then(() => setPlayError(false))
+        .catch(() => setPlayError(true));
     }
     setPlaying((p) => !p);
   };
 
   const onLoadedMetadata = () => {
     const audio = audioRef.current;
-    if (audio && isFinite(audio.duration) && audio.duration > 0) {
-      setDuration(audio.duration);
-    }
+    if (audio && isFinite(audio.duration) && audio.duration > 0) setDuration(audio.duration);
   };
 
   const onTimeUpdate = () => {
@@ -168,44 +195,60 @@ function VoiceBubblePlayer({ src, isMe, duration: initialDuration }) {
   const barColor = isMe ? "bg-white/70" : "bg-cyan-400/80";
 
   return (
-    <div className="flex items-center gap-2 min-w-[190px]">
-      <audio
-        ref={audioRef}
-        src={src}
-        preload="metadata"
-        onLoadedMetadata={onLoadedMetadata}
-        onTimeUpdate={onTimeUpdate}
-        onEnded={() => {
-          setPlaying(false);
-          setProgress(0);
-        }}
-        className="hidden"
-      />
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          toggle();
-        }}
-        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-          isMe ? "bg-white/20 text-white" : "bg-cyan-500/20 text-slate-800 dark:text-white"
-        }`}
-      >
-        {playing ? <Pause size={14} /> : <Play size={14} className="ml-0.5" />}
-      </button>
-      <div className="flex-1 h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
-        <div className={`h-full ${barColor} transition-all`} style={{ width: `${progress}%` }} />
+    <div className="flex flex-col gap-1 min-w-[190px]">
+      <div className="flex items-center gap-2">
+        <audio
+          ref={audioRef}
+          src={src}
+          preload="metadata"
+          onLoadedMetadata={onLoadedMetadata}
+          onTimeUpdate={onTimeUpdate}
+          onEnded={() => {
+            setPlaying(false);
+            setProgress(0);
+          }}
+          onError={() => setPlayError(true)}
+          className="hidden"
+        />
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            toggle();
+          }}
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+            isMe ? "bg-white/20 text-white" : "bg-cyan-500/20 text-slate-800 dark:text-white"
+          }`}
+        >
+          {playing ? <Pause size={14} /> : <Play size={14} className="ml-0.5" />}
+        </button>
+        <div className="flex-1 h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+          <div className={`h-full ${barColor} transition-all`} style={{ width: `${progress}%` }} />
+        </div>
+        <span className="text-[10px] tabular-nums opacity-70 shrink-0">{formatDuration(duration)}</span>
       </div>
-      <span className="text-[10px] tabular-nums opacity-70 shrink-0">{formatDuration(duration)}</span>
+      {playError && <span className="text-[10px] text-rose-300">{tr.audioError}</span>}
     </div>
   );
 }
 
-function MessageBubble({ msg, isMe, isSelected, onSelect, onUnsend }) {
+/* -------------------------------------------------------------------------- */
+interface MessageBubbleProps {
+  msg: ChatMessage;
+  isMe: boolean;
+  isSelected: boolean;
+  onSelect: (id: number | null) => void;
+  onUnsend: (id: number) => void;
+  lang: Lang;
+}
+
+function MessageBubble({ msg, isMe, isSelected, onSelect, onUnsend, lang }: MessageBubbleProps) {
+  const tr = translations[lang] || translations.id;
+
   if (msg.unsent) {
     return (
       <div className={`flex ${isMe ? "justify-end" : "justify-start"} mb-2`}>
         <span className="text-xs italic px-3 py-1.5 rounded-full bg-black/5 dark:bg-slate-800/90 text-slate-400 dark:text-slate-300">
-          {isMe ? "Kamu menarik pesan ini" : "Pesan ditarik"}
+          {isMe ? tr.unsendMine : tr.unsendTheirs}
         </span>
       </div>
     );
@@ -238,7 +281,7 @@ function MessageBubble({ msg, isMe, isSelected, onSelect, onUnsend }) {
           )}
 
           {(msg.type === "voice" || msg.type === "audio") && audioSrc && (
-            <VoiceBubblePlayer src={audioSrc} isMe={isMe} duration={msg.duration} />
+            <VoiceBubblePlayer src={audioSrc} isMe={isMe} duration={msg.duration} lang={lang} />
           )}
 
           <AnimatePresence>
@@ -263,7 +306,7 @@ function MessageBubble({ msg, isMe, isSelected, onSelect, onUnsend }) {
             isMe ? "justify-end mr-1" : "justify-start ml-1"
           }`}
         >
-          <span>{formatTime(msg.timestamp || msg.id)}</span>
+          <span>{formatTime(msg.timestamp || msg.id, lang)}</span>
           {isMe && <ReceiptTicks status={msg.status || "sent"} />}
         </span>
       </div>
@@ -283,12 +326,20 @@ function TypingIndicator() {
   );
 }
 
-function CameraModal({ onClose, onCapture }) {
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-  const streamRef = useRef(null);
+/* -------------------------------------------------------------------------- */
+interface CameraModalProps {
+  onClose: () => void;
+  onCapture: (dataUrl: string) => void;
+  lang: Lang;
+}
+
+function CameraModal({ onClose, onCapture, lang }: CameraModalProps) {
+  const tr = translations[lang] || translations.id;
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [ready, setReady] = useState(false);
-  const [preview, setPreview] = useState(null);
+  const [preview, setPreview] = useState<string | null>(null);
 
   useEffect(() => {
     navigator.mediaDevices
@@ -300,7 +351,7 @@ function CameraModal({ onClose, onCapture }) {
           videoRef.current.onloadedmetadata = () => setReady(true);
         }
       })
-      .catch(() => alert("Gagal mengakses kamera."));
+      .catch(() => alert(tr.cameraPermission));
 
     return () => streamRef.current?.getTracks().forEach((t) => t.stop());
   }, []);
@@ -313,6 +364,7 @@ function CameraModal({ onClose, onCapture }) {
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
     ctx.translate(canvas.width, 0);
     ctx.scale(-1, 1);
@@ -332,7 +384,7 @@ function CameraModal({ onClose, onCapture }) {
       <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} className="relative w-full max-w-sm rounded-2xl overflow-hidden bg-slate-900">
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700/70">
           <span className="flex items-center gap-2 text-sm font-medium text-slate-200">
-            <Camera size={16} /> Kamera Snap
+            <Camera size={16} /> {tr.cameraTitle}
           </span>
           <button onClick={onClose} className="text-slate-300">
             <X size={16} />
@@ -352,10 +404,10 @@ function CameraModal({ onClose, onCapture }) {
           ) : (
             <>
               <button onClick={() => setPreview(null)} className="px-4 py-2 rounded-full bg-slate-700 text-slate-100">
-                <RotateCcw size={14} className="inline mr-1" /> Ulangi
+                <RotateCcw size={14} className="inline mr-1" /> {tr.cameraRetry}
               </button>
               <button onClick={() => onCapture(preview)} className="px-4 py-2 rounded-full bg-[#7c6ef2] text-white">
-                <Send size={14} className="inline mr-1" /> Kirim
+                <Send size={14} className="inline mr-1" /> {tr.cameraSend}
               </button>
             </>
           )}
@@ -366,9 +418,17 @@ function CameraModal({ onClose, onCapture }) {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Modal konfirmasi generik — dipakai untuk aksi "Next"                     */
-/* -------------------------------------------------------------------------- */
-function ConfirmModal({ title, message, confirmLabel = "Ya", cancelLabel = "Tidak", onConfirm, onCancel, danger = true }) {
+interface ConfirmModalProps {
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  danger?: boolean;
+}
+
+function ConfirmModal({ title, message, confirmLabel = "Ya", cancelLabel = "Tidak", onConfirm, onCancel, danger = true }: ConfirmModalProps) {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
       <motion.div
@@ -404,9 +464,14 @@ function ConfirmModal({ title, message, confirmLabel = "Ya", cancelLabel = "Tida
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Overlay panggilan masuk (voice call)                                      */
-/* -------------------------------------------------------------------------- */
-function IncomingCallModal({ onAccept, onDecline }) {
+interface IncomingCallModalProps {
+  onAccept: () => void;
+  onDecline: () => void;
+  lang: Lang;
+}
+
+function IncomingCallModal({ onAccept, onDecline, lang }: IncomingCallModalProps) {
+  const tr = translations[lang] || translations.id;
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[70] flex flex-col items-center justify-center gap-8 bg-slate-950/95 backdrop-blur-md p-6">
       <div className="flex flex-col items-center gap-4">
@@ -419,8 +484,8 @@ function IncomingCallModal({ onAccept, onDecline }) {
           <PhoneIncoming size={32} className="text-white relative" />
         </div>
         <div className="text-center">
-          <p className="text-white font-semibold text-base">Panggilan suara masuk</p>
-          <p className="text-slate-400 text-xs mt-1">Orang asing mengajak voice call</p>
+          <p className="text-white font-semibold text-base">{tr.incomingCallTitle}</p>
+          <p className="text-slate-400 text-xs mt-1">{tr.incomingCallSubtitle}</p>
         </div>
       </div>
       <div className="flex items-center gap-8">
@@ -428,13 +493,13 @@ function IncomingCallModal({ onAccept, onDecline }) {
           <span className="flex h-14 w-14 items-center justify-center rounded-full bg-rose-500 text-white shadow-lg shadow-rose-500/30 active:scale-95 transition-transform">
             <PhoneOff size={22} />
           </span>
-          <span className="text-[11px] text-slate-400">Tolak</span>
+          <span className="text-[11px] text-slate-400">{tr.callDecline}</span>
         </button>
         <button onClick={onAccept} className="flex flex-col items-center gap-2">
           <span className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 active:scale-95 transition-transform">
             <Phone size={22} />
           </span>
-          <span className="text-[11px] text-slate-400">Terima</span>
+          <span className="text-[11px] text-slate-400">{tr.callAccept}</span>
         </button>
       </div>
     </motion.div>
@@ -442,9 +507,17 @@ function IncomingCallModal({ onAccept, onDecline }) {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Bar panggilan aktif (calling / in_call) — sticky di bawah header          */
-/* -------------------------------------------------------------------------- */
-function CallBar({ callStatus, seconds, muted, onToggleMute, onEndCall }) {
+interface CallBarProps {
+  callStatus: CallStatus;
+  seconds: number;
+  muted: boolean;
+  onToggleMute: () => void;
+  onEndCall: () => void;
+  lang: Lang;
+}
+
+function CallBar({ callStatus, seconds, muted, onToggleMute, onEndCall, lang }: CallBarProps) {
+  const tr = translations[lang] || translations.id;
   return (
     <motion.div
       initial={{ height: 0, opacity: 0 }}
@@ -460,7 +533,7 @@ function CallBar({ callStatus, seconds, muted, onToggleMute, onEndCall }) {
             className="flex h-2 w-2 rounded-full bg-white"
           />
           <span className="text-xs font-medium">
-            {callStatus === "calling" ? "Memanggil…" : `Voice call • ${formatDuration(seconds)}`}
+            {callStatus === "calling" ? tr.callCalling : `${tr.callLabel} • ${formatDuration(seconds)}`}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -481,52 +554,89 @@ function CallBar({ callStatus, seconds, muted, onToggleMute, onEndCall }) {
 /* -------------------------------------------------------------------------- */
 /*  Komponen utama: ChatInterface                                            */
 /* -------------------------------------------------------------------------- */
-export default function ChatInterface({ onNavigateToAbout }) {
-  const [darkMode, setDarkMode] = useState(true);
-  const [status, setStatus] = useState("connected");
+interface ChatInterfaceProps {
+  onNavigateToAbout?: () => void;
+}
+
+export default function ChatInterface({ onNavigateToAbout }: ChatInterfaceProps) {
+  const [darkMode, setDarkMode] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    const saved = window.localStorage.getItem("anonnect-theme");
+    if (saved === "dark") return true;
+    if (saved === "light") return false;
+    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? true;
+  });
+
+  const [lang, setLang] = useState<Lang>(() => {
+    if (typeof window === "undefined") return "id";
+    return window.localStorage.getItem("anonnect-lang") === "en" ? "en" : "id";
+  });
+  const langRef = useRef<Lang>(lang);
+
+  const [status, setStatus] = useState<ConnectionStatus>("connected");
   const [onlineCount, setOnlineCount] = useState(0);
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState("");
   const [partnerTyping, setPartnerTyping] = useState(false);
-  const [selectedMsgId, setSelectedMsgId] = useState(null);
+  const [selectedMsgId, setSelectedMsgId] = useState<number | null>(null);
 
   const [showCamera, setShowCamera] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [recordSeconds, setRecordSeconds] = useState(0);
 
-  // ✦ Presence partner
   const [partnerOnline, setPartnerOnline] = useState(false);
-  // ✦ Konfirmasi Next
   const [showNextConfirm, setShowNextConfirm] = useState(false);
-  // ✦ Voice call
-  const [callStatus, setCallStatus] = useState("idle"); // idle | calling | incoming | in_call
+  const [callStatus, setCallStatus] = useState<CallStatus>("idle");
   const [callMuted, setCallMuted] = useState(false);
   const [callSeconds, setCallSeconds] = useState(0);
 
-  const messagesEndRef = useRef(null);
-  const typingTimeoutRef = useRef(null);
-  const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
-  const recordStartRef = useRef(0);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordStartRef = useRef<number>(0);
+  const recordIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // ✦ Refs voice call
-  const localStreamRef = useRef(null);
-  const peerConnectionRef = useRef(null);
-  const remoteAudioRef = useRef(null);
-  const callTimerRef = useRef(null);
-  const pendingOfferRef = useRef(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
+  const callTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pendingOfferRef = useRef<RTCSessionDescriptionInit | null>(null);
 
-  /* --- ✦ Helper WebRTC --- */
-  function createPeerConnection() {
-    const pc = new RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-    });
+  const tr = translations[lang] || translations.id;
+
+  useEffect(() => {
+    window.localStorage.setItem("anonnect-theme", darkMode ? "dark" : "light");
+    const root = document.documentElement;
+    if (darkMode) root.classList.add("dark");
+    else root.classList.remove("dark");
+  }, [darkMode]);
+
+  useEffect(() => {
+    window.localStorage.setItem("anonnect-lang", lang);
+    langRef.current = lang;
+  }, [lang]);
+
+  function createPeerConnection(): RTCPeerConnection {
+    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
 
     pc.onicecandidate = (e) => {
       if (e.candidate) socket.emit("ice_candidate", { candidate: e.candidate });
     };
 
     pc.ontrack = (e) => {
-      if (remoteAudioRef.current) remoteAudioRef.current.srcObject = e.streams[0];
+      const audioEl = remoteAudioRef.current;
+      if (audioEl) {
+        audioEl.srcObject = e.streams[0];
+        audioEl.play().catch(() => {});
+      }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      if (pc.iceConnectionState === "failed") {
+        alert(translations[langRef.current].callConnectionFailed);
+        endCall(true);
+      }
     };
 
     return pc;
@@ -538,12 +648,13 @@ export default function ChatInterface({ onNavigateToAbout }) {
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
     localStreamRef.current = null;
     pendingOfferRef.current = null;
-    clearInterval(callTimerRef.current);
+    if (remoteAudioRef.current) remoteAudioRef.current.srcObject = null;
+    if (callTimerRef.current) clearInterval(callTimerRef.current);
     setCallSeconds(0);
     setCallMuted(false);
   }
 
-  function endCall(notify = true) {
+  function endCall(notify: boolean = true) {
     if (notify && callStatus !== "idle") socket.emit("call_ended");
     cleanupCall();
     setCallStatus("idle");
@@ -563,7 +674,7 @@ export default function ChatInterface({ onNavigateToAbout }) {
       socket.emit("call_offer", { offer });
       setCallStatus("calling");
     } catch {
-      alert("Izinkan akses mikrofon untuk memulai voice call.");
+      alert(tr.micPermissionCall);
     }
   };
 
@@ -575,13 +686,14 @@ export default function ChatInterface({ onNavigateToAbout }) {
       stream.getTracks().forEach((track) => pc.addTrack(track, stream));
       peerConnectionRef.current = pc;
 
+      if (!pendingOfferRef.current) throw new Error("no pending offer");
       await pc.setRemoteDescription(new RTCSessionDescription(pendingOfferRef.current));
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       socket.emit("call_answer", { answer });
       setCallStatus("in_call");
     } catch {
-      alert("Izinkan akses mikrofon untuk menerima voice call.");
+      alert(tr.micPermissionAccept);
       declineCall();
     }
   };
@@ -599,89 +711,85 @@ export default function ChatInterface({ onNavigateToAbout }) {
     setCallMuted((m) => !m);
   };
 
-  /* --- Timer durasi call --- */
   useEffect(() => {
     if (callStatus === "in_call") {
       callTimerRef.current = setInterval(() => setCallSeconds((s) => s + 1), 1000);
-    } else {
+    } else if (callTimerRef.current) {
       clearInterval(callTimerRef.current);
     }
-    return () => clearInterval(callTimerRef.current);
+    return () => {
+      if (callTimerRef.current) clearInterval(callTimerRef.current);
+    };
   }, [callStatus]);
 
-  /* --- Event listener socket --- */
   useEffect(() => {
     socket.connect();
 
-    socket.on("online_count", (count) => setOnlineCount(count));
+    socket.on("online_count", (count: number) => setOnlineCount(count));
 
     socket.on("waiting", () => {
       setStatus("searching");
       setPartnerOnline(false);
-      setMessages([{ id: Date.now(), text: "Mencari pasangan obrolan baru...", sender: "stranger", type: "text" }]);
+      setMessages([{ id: Date.now(), text: translations[langRef.current].waitingMessage, sender: "stranger", type: "text" }]);
     });
 
-    socket.on("connected", (data) => {
+    socket.on("connected", () => {
+      const currentLang = langRef.current;
       setStatus("connected");
       setPartnerOnline(true);
       setMessages([
         {
           id: Date.now(),
-          text: data?.isBot ? "Terhubung dengan sistem otomatis!" : "Pasangan ditemukan! Ucapkan Hai 👋",
+          text: translations[currentLang].realConnectedMessage,
           sender: "stranger",
           type: "text",
         },
       ]);
     });
 
-    // ✦ Presence real-time partner (tidak memutus koneksi, hanya status aktif/tidak)
     socket.on("partner_online", () => setPartnerOnline(true));
     socket.on("partner_offline", () => setPartnerOnline(false));
 
-    socket.on("receive_message", (incomingMsg) => {
+    socket.on("receive_message", (incomingMsg: ChatMessage) => {
       setMessages((prev) => [...prev, incomingMsg]);
-      // ✦ Beri tahu pengirim: pesan sudah sampai & langsung terbaca (chat sedang terbuka)
       socket.emit("mark_delivered", incomingMsg.id);
       socket.emit("mark_read", incomingMsg.id);
     });
 
-    // ✦ Centang 2 abu-abu — pesan kita sudah sampai ke perangkat partner
-    socket.on("message_delivered", (messageId) => {
+    socket.on("message_delivered", (messageId: number) => {
       setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, status: m.status === "read" ? "read" : "delivered" } : m)));
     });
 
-    // ✦ Centang 2 biru — partner sudah membaca pesan kita
-    socket.on("message_read", (messageId) => {
+    socket.on("message_read", (messageId: number) => {
       setMessages((prev) => prev.map((m) => (m.sender === "me" && m.id <= messageId ? { ...m, status: "read" } : m)));
     });
 
-    socket.on("delete_message", (messageId) => {
+    socket.on("delete_message", (messageId: number) => {
       setMessages((prev) => prev.filter((msg) => msg.id !== messageId));
     });
 
     socket.on("partner_disconnected", () => {
       setStatus("disconnected");
       setPartnerOnline(false);
-      setMessages((prev) => [...prev, { id: Date.now(), text: "Orang asing telah meninggalkan obrolan.", sender: "stranger", type: "text" }]);
+      setMessages((prev) => [...prev, { id: Date.now(), text: translations[langRef.current].strangerLeftMessage, sender: "stranger", type: "text" }]);
       endCall(false);
     });
 
     socket.on("lawan_sedang_mengetik", () => setPartnerTyping(true));
     socket.on("lawan_berhenti_mengetik", () => setPartnerTyping(false));
 
-    // ✦ Signaling voice call
-    socket.on("call_offer", ({ offer }) => {
+    socket.on("call_offer", ({ offer }: { offer: RTCSessionDescriptionInit }) => {
       pendingOfferRef.current = offer;
       setCallStatus("incoming");
     });
 
-    socket.on("call_answer", async ({ answer }) => {
+    socket.on("call_answer", async ({ answer }: { answer: RTCSessionDescriptionInit }) => {
       const pc = peerConnectionRef.current;
       if (pc) await pc.setRemoteDescription(new RTCSessionDescription(answer));
       setCallStatus("in_call");
     });
 
-    socket.on("ice_candidate", async ({ candidate }) => {
+    socket.on("ice_candidate", async ({ candidate }: { candidate: RTCIceCandidateInit }) => {
       const pc = peerConnectionRef.current;
       if (pc && candidate) {
         try {
@@ -723,14 +831,14 @@ export default function ChatInterface({ onNavigateToAbout }) {
       socket.disconnect();
       cleanupCall();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, partnerTyping]);
 
-  /* --- ACTIONS --- */
-  const handleInputChange = (e) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInputText(e.target.value);
     socket.emit("typing");
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
@@ -742,14 +850,14 @@ export default function ChatInterface({ onNavigateToAbout }) {
   const sendText = () => {
     const text = inputText.trim();
     if (!text || status !== "connected") return;
-    const newMsg = { id: Date.now(), text: text, sender: "me", type: "text", status: "sent" };
+    const newMsg: ChatMessage = { id: Date.now(), text: text, sender: "me", type: "text", status: "sent" };
     setMessages((prev) => [...prev, newMsg]);
     socket.emit("send_message", newMsg);
     setInputText("");
     socket.emit("stop_typing");
   };
 
-  const handleUnsend = (id) => {
+  const handleUnsend = (id: number) => {
     setMessages((prev) => prev.filter((msg) => msg.id !== id));
     socket.emit("unsend_message", id);
     setSelectedMsgId(null);
@@ -760,10 +868,9 @@ export default function ChatInterface({ onNavigateToAbout }) {
     socket.emit("stop_chat");
     setStatus("disconnected");
     setPartnerOnline(false);
-    setMessages((prev) => [...prev, { id: Date.now(), text: "Kamu telah meninggalkan obrolan.", sender: "stranger", type: "text" }]);
+    setMessages((prev) => [...prev, { id: Date.now(), text: tr.leftMessage, sender: "stranger", type: "text" }]);
   };
 
-  // ✦ "Next" sekarang hanya membuka konfirmasi
   const handleNext = () => {
     setShowNextConfirm(true);
   };
@@ -776,14 +883,13 @@ export default function ChatInterface({ onNavigateToAbout }) {
     socket.emit("find_partner");
   };
 
-  const handleCapture = (dataUrl) => {
-    const newMsg = { id: Date.now(), image: dataUrl, sender: "me", type: "snap", status: "sent" };
+  const handleCapture = (dataUrl: string) => {
+    const newMsg: ChatMessage = { id: Date.now(), image: dataUrl, sender: "me", type: "snap", status: "sent" };
     setMessages((prev) => [...prev, newMsg]);
     socket.emit("send_message", newMsg);
     setShowCamera(false);
   };
 
-  // ✦ Rekam suara — diperbaiki: mimeType eksplisit + durasi + guard rekaman kosong
   const startRecording = async () => {
     if (status !== "connected") return;
     try {
@@ -798,13 +904,15 @@ export default function ChatInterface({ onNavigateToAbout }) {
       audioChunksRef.current = [];
       recordStartRef.current = Date.now();
 
-      mediaRecorder.ondataavailable = (event) => {
+      mediaRecorder.ondataavailable = (event: BlobEvent) => {
         if (event.data && event.data.size > 0) audioChunksRef.current.push(event.data);
       };
 
       mediaRecorder.onstop = () => {
         stream.getTracks().forEach((track) => track.stop());
-        if (audioChunksRef.current.length === 0) return; // rekaman terlalu singkat/gagal, jangan kirim
+        if (recordIntervalRef.current) clearInterval(recordIntervalRef.current);
+        setRecordSeconds(0);
+        if (audioChunksRef.current.length === 0) return;
 
         const blobType = mediaRecorder.mimeType || supportedType || "audio/webm";
         const audioBlob = new Blob(audioChunksRef.current, { type: blobType });
@@ -812,8 +920,8 @@ export default function ChatInterface({ onNavigateToAbout }) {
 
         const reader = new FileReader();
         reader.onloadend = () => {
-          const base64Audio = reader.result;
-          const newMsg = {
+          const base64Audio = reader.result as string;
+          const newMsg: ChatMessage = {
             id: Date.now(),
             audio: base64Audio,
             sender: "me",
@@ -829,8 +937,18 @@ export default function ChatInterface({ onNavigateToAbout }) {
 
       mediaRecorder.start();
       setIsRecording(true);
+      setRecordSeconds(0);
+      recordIntervalRef.current = setInterval(() => {
+        setRecordSeconds((s) => {
+          if (s + 1 >= MAX_RECORD_SECONDS) {
+            stopRecording();
+            return MAX_RECORD_SECONDS;
+          }
+          return s + 1;
+        });
+      }, 1000);
     } catch {
-      alert("Izinkan akses mikrofon untuk pesan suara.");
+      alert(tr.micPermission);
     }
   };
 
@@ -838,23 +956,22 @@ export default function ChatInterface({ onNavigateToAbout }) {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
+      if (recordIntervalRef.current) clearInterval(recordIntervalRef.current);
     }
   };
 
-  const s = STATUS[status];
+  const statusLabel = tr[`status${capitalize(status)}` as keyof typeof tr];
   const canType = status === "connected";
 
   return (
     <div className={darkMode ? "dark" : ""}>
-      <div className="flex flex-col h-[100dvh] w-full bg-slate-50 dark:bg-[#0B0F19] text-slate-800 dark:text-slate-100 transition-colors">
-        {/* Header */}
+      <div className="flex flex-col h-[100dvh] w-full bg-slate-50 dark:bg-[#0B0F19] text-slate-800 dark:text-slate-100 transition-colors duration-300">
         <header className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-slate-200/80 dark:border-slate-800/80 bg-white/80 dark:bg-[#0B0F19]/80 backdrop-blur-md sticky top-0 z-20">
           <div className="flex items-center gap-2.5">
-            {/* INI BAGIAN LOGO HEADER YANG DIGANTI */}
-            <img 
-              src="/anonnect-logo.svg" 
-              alt="Anonnect Logo" 
-              className="relative flex h-9 w-9 rounded-xl shadow-lg shadow-violet-500/20 object-cover" 
+            <img
+              src="/anonnect-logo.svg"
+              alt="Anonnect Logo"
+              className="relative flex h-9 w-9 rounded-xl shadow-lg shadow-violet-500/20 object-cover"
             />
             <div>
               <h1 className="text-base font-bold tracking-tight bg-gradient-to-r from-cyan-500 to-violet-600 bg-clip-text text-transparent">
@@ -862,37 +979,46 @@ export default function ChatInterface({ onNavigateToAbout }) {
               </h1>
               <div className="flex items-center gap-1.5 -mt-0.5">
                 <StatusDot status={status} />
-                <span className="text-[11px] text-slate-500 dark:text-slate-400">{s.label}</span>
-                {/* ✦ Presence partner — hanya tampil saat terhubung */}
+                <span className="text-[11px] text-slate-500 dark:text-slate-400">{statusLabel}</span>
                 {status === "connected" && (
                   <span className="flex items-center gap-1 ml-1 text-[11px] text-slate-400 dark:text-slate-500">
                     <span className="opacity-50">•</span>
                     <span className={`h-1.5 w-1.5 rounded-full ${partnerOnline ? "bg-emerald-400" : "bg-slate-400"}`} />
-                    {partnerOnline ? "Partner online" : "Partner offline"}
+                    {partnerOnline ? tr.partnerOnline : tr.partnerOffline}
                   </span>
                 )}
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800/80 text-xs font-medium">
               <Users size={13} className="text-emerald-500" />
-              <span className="tabular-nums">{onlineCount.toLocaleString("id-ID")}</span>
+              <span className="tabular-nums">{onlineCount.toLocaleString(lang === "en" ? "en-US" : "id-ID")}</span>
             </div>
 
-            {/* ✦ Tombol mulai voice call */}
+            <button
+              onClick={() => setLang((l) => (l === "id" ? "en" : "id"))}
+              title={lang === "id" ? "Switch to English" : "Ganti ke Bahasa Indonesia"}
+              className="h-8 px-2 flex items-center gap-1 rounded-full bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 text-[11px] font-semibold transition-colors"
+            >
+              <Globe size={13} />
+              {lang.toUpperCase()}
+            </button>
+
             <button
               onClick={startCall}
               disabled={status !== "connected" || callStatus !== "idle"}
+              title={tr.voiceCallTooltip}
               className="h-8 w-8 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-30 transition-colors"
-              title="Voice call"
             >
               <Phone size={15} />
             </button>
 
             <button
               onClick={() => setDarkMode((v) => !v)}
+              aria-label={darkMode ? tr.themeLight : tr.themeDark}
+              title={darkMode ? tr.themeLight : tr.themeDark}
               className="h-8 w-8 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
             >
               {darkMode ? <Moon size={15} /> : <Sun size={15} />}
@@ -900,14 +1026,12 @@ export default function ChatInterface({ onNavigateToAbout }) {
           </div>
         </header>
 
-        {/* ✦ Call bar — muncul saat memanggil / sedang in-call */}
         <AnimatePresence>
           {(callStatus === "calling" || callStatus === "in_call") && (
-            <CallBar callStatus={callStatus} seconds={callSeconds} muted={callMuted} onToggleMute={toggleMute} onEndCall={() => endCall(true)} />
+            <CallBar callStatus={callStatus} seconds={callSeconds} muted={callMuted} onToggleMute={toggleMute} onEndCall={() => endCall(true)} lang={lang} />
           )}
         </AnimatePresence>
 
-        {/* Chat Body */}
         <main onClick={() => setSelectedMsgId(null)} className="flex-1 overflow-y-auto px-3 sm:px-4 py-4">
           <div className="max-w-2xl mx-auto">
             {messages.map((msg) => (
@@ -918,6 +1042,7 @@ export default function ChatInterface({ onNavigateToAbout }) {
                 isSelected={selectedMsgId === msg.id}
                 onSelect={setSelectedMsgId}
                 onUnsend={handleUnsend}
+                lang={lang}
               />
             ))}
             <AnimatePresence>{partnerTyping && <TypingIndicator />}</AnimatePresence>
@@ -925,11 +1050,15 @@ export default function ChatInterface({ onNavigateToAbout }) {
           </div>
         </main>
 
-        {/* Input Bar */}
         <footer className="shrink-0 border-t border-slate-200/80 dark:border-slate-800/80 bg-white/90 dark:bg-[#0B0F19]/90 backdrop-blur-md">
           <div className="max-w-2xl mx-auto w-full px-3 sm:px-4 pt-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))]">
             <div className="flex items-center gap-1.5 sm:gap-2">
-              <button onClick={handleStop} disabled={status === "disconnected"} className="h-10 w-10 shrink-0 flex items-center justify-center rounded-full bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 disabled:opacity-30">
+              <button
+                onClick={handleStop}
+                disabled={status === "disconnected"}
+                title={tr.stopChatTooltip}
+                className="h-10 w-10 shrink-0 flex items-center justify-center rounded-full bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 disabled:opacity-30"
+              >
                 <PhoneOff size={17} />
               </button>
 
@@ -944,13 +1073,17 @@ export default function ChatInterface({ onNavigateToAbout }) {
                   value={inputText}
                   onChange={handleInputChange}
                   disabled={!canType}
-                  placeholder={canType ? "Tulis pesan…" : "Menunggu koneksi…"}
+                  placeholder={canType ? tr.inputPlaceholder : tr.inputPlaceholderWaiting}
                   className="flex-1 bg-transparent outline-none text-sm placeholder:text-slate-400 disabled:cursor-not-allowed min-w-0"
                 />
 
                 <button type="button" onClick={() => setShowCamera(true)} disabled={!canType} className="h-8 w-8 flex items-center justify-center rounded-full text-slate-500 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-30">
                   <Camera size={16} />
                 </button>
+
+                {isRecording && (
+                  <span className="text-[10px] tabular-nums text-rose-500 font-medium px-0.5">{formatDuration(recordSeconds)}</span>
+                )}
 
                 <button
                   type="button"
@@ -977,37 +1110,38 @@ export default function ChatInterface({ onNavigateToAbout }) {
             </div>
 
             <div className="flex items-center justify-center gap-1.5 mt-2.5 text-[11px] text-slate-400 dark:text-slate-500">
-              <span>🔒 Secured by Anonnect</span>
+              <span>{tr.footerSecured}</span>
               <span className="opacity-40">•</span>
               <button onClick={onNavigateToAbout} className="hover:text-slate-600 dark:hover:text-slate-300 underline-offset-2 hover:underline">
-                <Info size={11} className="inline" /> Tentang Developer
+                <Info size={11} className="inline" /> {tr.footerAbout}
               </button>
             </div>
           </div>
         </footer>
 
-        {/* Modal Camera */}
-        <AnimatePresence>{showCamera && <CameraModal onClose={() => setShowCamera(false)} onCapture={handleCapture} />}</AnimatePresence>
+        <AnimatePresence>{showCamera && <CameraModal onClose={() => setShowCamera(false)} onCapture={handleCapture} lang={lang} />}</AnimatePresence>
 
-        {/* ✦ Konfirmasi Next */}
         <AnimatePresence>
           {showNextConfirm && (
             <ConfirmModal
-              title="Cari pasangan baru?"
-              message="Anda yakin menghentikan percakapan dengan orang ini dan mencari pasangan baru?"
-              confirmLabel="Ya, Lanjutkan"
-              cancelLabel="Tidak"
+              title={tr.nextConfirmTitle}
+              message={tr.nextConfirmMessage}
+              confirmLabel={tr.nextConfirmYes}
+              cancelLabel={tr.nextConfirmNo}
               onConfirm={confirmNext}
               onCancel={() => setShowNextConfirm(false)}
             />
           )}
         </AnimatePresence>
 
-        {/* ✦ Panggilan masuk */}
-        <AnimatePresence>{callStatus === "incoming" && <IncomingCallModal onAccept={acceptCall} onDecline={declineCall} />}</AnimatePresence>
+        <AnimatePresence>{callStatus === "incoming" && <IncomingCallModal onAccept={acceptCall} onDecline={declineCall} lang={lang} />}</AnimatePresence>
 
-        {/* ✦ Elemen audio tersembunyi untuk memutar suara lawan bicara saat voice call */}
-        <audio ref={remoteAudioRef} autoPlay className="hidden" />
+        <audio
+          ref={remoteAudioRef}
+          autoPlay
+          playsInline
+          style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
+        />
       </div>
     </div>
   );

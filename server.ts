@@ -1,189 +1,210 @@
-import express from 'express';
-import http from 'http';
-import path from 'path';
-import { Server, Socket } from 'socket.io';
-import { createServer as createViteServer } from 'vite';
+import "dotenv/config";
+import express from "express";
+import http from "http";
+import path from "path";
+import { Server, Socket } from "socket.io";
+import { createServer as createViteServer } from "vite";
+
+type Language = "id" | "en";
+
+interface ChatMessage {
+  id: string;
+  sender: "me" | "stranger";
+  type: "text" | "snap" | "photo" | "audio" | "voice";
+  text?: string;
+  content?: string;
+  image?: string;
+  audio?: string;
+  duration?: number;
+  timestamp?: number;
+  status?: "sent" | "delivered" | "read";
+}
 
 interface CustomSocket extends Socket {
   room?: string | null;
-  isBotPartner?: boolean;
+  language?: Language;
 }
+
+const PORT = Number(process.env.PORT || 3000);
 
 async function startServer() {
   const app = express();
   const server = http.createServer(app);
-  const PORT = 3000;
 
-  // Configure Socket.IO
   const io = new Server(server, {
-    cors: { origin: "*" }
+    cors: { origin: "*", methods: ["GET", "POST"] },
+    maxHttpBufferSize: 8 * 1024 * 1024,
+    transports: ["websocket", "polling"],
   });
 
-  // Store user waiting for match
-  let waitingUser: CustomSocket | null = null;
-  
-  // Menambahkan variabel untuk menghitung jumlah pengguna online murni
+  const waitingUsers: CustomSocket[] = [];
   let onlineUsersCount = 0;
 
-  io.on('connection', (rawSocket: Socket) => {
-    const socket = rawSocket as CustomSocket;
-    console.log('Client connected:', socket.id);
+  function emitOnlineCount() {
+    io.emit("online_count", Math.max(0, onlineUsersCount));
+  }
 
-    // 1. Tambah jumlah user asli
-    onlineUsersCount++;
+  function removeFromWaiting(socket: CustomSocket) {
+    const index = waitingUsers.findIndex((user) => user.id === socket.id);
+    if (index !== -1) waitingUsers.splice(index, 1);
+  }
 
-    // 2. Terapkan Trik Pemancing Angka (Tambah 49 jika ada minimal 1 user)
-    let angkaPemancing = onlineUsersCount >= 1 ? onlineUsersCount + 49 : 0;
-    io.emit('online_count', angkaPemancing);
+  function createRoomName(first: CustomSocket, second: CustomSocket) {
+    return `room_${first.id}_${second.id}_${Date.now()}`;
+  }
 
-    // =========================================================================
-    // 1. FIND PARTNER / MATCHMAKING
-    // =========================================================================
-    socket.on('find_partner', () => {
-      // Leave previous room if any
-      if (socket.room) {
-        socket.to(socket.room).emit('partner_disconnected');
-        socket.leave(socket.room);
-        socket.room = null;
-        socket.isBotPartner = false;
-      }
+  function findPartner(socket: CustomSocket, language: Language) {
+    socket.language = language === "en" ? "en" : "id";
+    removeFromWaiting(socket);
 
-      // Check if someone else is waiting
-      if (waitingUser && waitingUser.id !== socket.id && waitingUser.connected) {
-        const roomName = `room_${socket.id}_${waitingUser.id}`;
-        
+    if (socket.room) {
+      const oldRoom = socket.room;
+      socket.to(oldRoom).emit("partner_disconnected");
+      socket.leave(oldRoom);
+      socket.room = null;
+    }
+
+    const availableIndex = waitingUsers.findIndex(
+      (candidate) => candidate.id !== socket.id && candidate.connected && !candidate.room
+    );
+
+    if (availableIndex !== -1) {
+      const other = waitingUsers.splice(availableIndex, 1)[0];
+      if (other) {
+        const roomName = createRoomName(socket, other);
         socket.join(roomName);
-        waitingUser.join(roomName);
-
+        other.join(roomName);
         socket.room = roomName;
-        waitingUser.room = roomName;
+        other.room = roomName;
 
-        socket.isBotPartner = false;
-        waitingUser.isBotPartner = false;
-
-        // Notify both clients that they are connected to a real partner
-        io.to(roomName).emit('connected', { isBot: false });
-
-        console.log(`Matched ${socket.id} with ${waitingUser.id} in ${roomName}`);
-        waitingUser = null;
-      } else {
-        waitingUser = socket;
-        socket.emit('waiting');
+        // Kirim sinyal connected tanpa embel-embel isBot
+        io.to(roomName).emit("connected");
+        io.to(roomName).emit("partner_online");
+        console.log(`Matched ${socket.id} <-> ${other.id}`);
+        return;
       }
+    }
+
+    waitingUsers.push(socket);
+    socket.emit("waiting");
+  }
+
+  io.on("connection", (rawSocket: Socket) => {
+    const socket = rawSocket as CustomSocket;
+    socket.room = null;
+    socket.language = "id";
+    
+    onlineUsersCount++;
+    emitOnlineCount();
+
+    socket.on("find_partner", (data) => {
+      findPartner(socket, data?.language === "en" ? "en" : "id");
     });
 
-    // =========================================================================
-    // 2. CHAT & TYPING INDICATOR
-    // =========================================================================
-    socket.on('send_message', (messageData: any) => {
-      if (!socket.room) return;
-      const partnerData = {
+    socket.on("send_message", (messageData: ChatMessage) => {
+      if (!socket.room || !messageData || !messageData.id) return;
+
+      const sanitized: ChatMessage = {
         ...messageData,
-        sender: "stranger"
+        id: String(messageData.id),
+        sender: "stranger",
+        timestamp: messageData.timestamp || Date.now(),
       };
-      socket.to(socket.room).emit('receive_message', partnerData);
+
+      socket.to(socket.room).emit("receive_message", sanitized);
     });
 
-    socket.on('unsend_message', (messageId: number | string) => {
-      if (socket.room && !socket.isBotPartner) {
-        socket.to(socket.room).emit('delete_message', messageId);
-      }
+    socket.on("unsend_message", (messageId: string) => {
+      if (!socket.room) return;
+      socket.to(socket.room).emit("delete_message", String(messageId));
     });
 
-    // BUG FIXED: Menggunakan socket.to(socket.room) agar tidak nyasar ke orang lain
-    socket.on('typing', () => {
-      if (socket.room) socket.to(socket.room).emit('lawan_sedang_mengetik');
+    socket.on("typing", () => {
+      if (!socket.room) return;
+      socket.to(socket.room).emit("lawan_sedang_mengetik");
     });
 
-    socket.on('stop_typing', () => {
-      if (socket.room) socket.to(socket.room).emit('lawan_berhenti_mengetik');
+    socket.on("stop_typing", () => {
+      if (!socket.room) return;
+      socket.to(socket.room).emit("lawan_berhenti_mengetik");
     });
 
-    // =========================================================================
-    // 3. ✦ FITUR BARU CLAUDE: READ RECEIPTS (CENTANG BIRU)
-    // =========================================================================
-    socket.on('mark_delivered', (msgId) => {
-      if (socket.room) socket.to(socket.room).emit('message_delivered', msgId);
+    socket.on("mark_delivered", (messageId: string) => {
+      if (!socket.room) return;
+      socket.to(socket.room).emit("message_delivered", String(messageId));
     });
 
-    socket.on('mark_read', (msgId) => {
-      if (socket.room) socket.to(socket.room).emit('message_read', msgId);
+    socket.on("mark_read", (messageId: string) => {
+      if (!socket.room) return;
+      socket.to(socket.room).emit("message_read", String(messageId));
     });
 
-    // =========================================================================
-    // 4. ✦ FITUR BARU CLAUDE: VOICE CALL (WebRTC)
-    // =========================================================================
-    socket.on('call_offer', (data) => {
-      if (socket.room) socket.to(socket.room).emit('call_offer', data);
+    socket.on("call_offer", (data) => {
+      if (!socket.room) return;
+      socket.to(socket.room).emit("call_offer", data);
     });
 
-    socket.on('call_answer', (data) => {
-      if (socket.room) socket.to(socket.room).emit('call_answer', data);
+    socket.on("call_answer", (data) => {
+      if (!socket.room) return;
+      socket.to(socket.room).emit("call_answer", data);
     });
 
-    socket.on('ice_candidate', (data) => {
-      if (socket.room) socket.to(socket.room).emit('ice_candidate', data);
+    socket.on("ice_candidate", (data) => {
+      if (!socket.room) return;
+      socket.to(socket.room).emit("ice_candidate", data);
     });
 
-    socket.on('call_declined', () => {
-      if (socket.room) socket.to(socket.room).emit('call_declined');
+    socket.on("call_declined", () => {
+      if (!socket.room) return;
+      socket.to(socket.room).emit("call_declined");
     });
 
-    socket.on('call_ended', () => {
-      if (socket.room) socket.to(socket.room).emit('call_ended');
+    socket.on("call_ended", () => {
+      if (!socket.room) return;
+      socket.to(socket.room).emit("call_ended");
     });
 
-    // =========================================================================
-    // 5. STOP CHAT / DISCONNECT
-    // =========================================================================
-    const handleDisconnect = () => {
-      if (waitingUser === socket) {
-        waitingUser = null;
-      }
+    socket.on("stop_chat", () => {
+      removeFromWaiting(socket);
+      if (!socket.room) return;
+      socket.to(socket.room).emit("partner_disconnected");
+      socket.leave(socket.room);
+      socket.room = null;
+    });
+
+    socket.on("disconnect", () => {
+      removeFromWaiting(socket);
       if (socket.room) {
-        if (!socket.isBotPartner) {
-          socket.to(socket.room).emit('partner_disconnected');
-        }
+        socket.to(socket.room).emit("partner_disconnected");
         socket.leave(socket.room);
         socket.room = null;
-        socket.isBotPartner = false;
       }
-    };
-
-    socket.on('stop_chat', handleDisconnect);
-    
-    socket.on('disconnect', () => {
       onlineUsersCount = Math.max(0, onlineUsersCount - 1);
-      let angkaBaru = onlineUsersCount >= 1 ? onlineUsersCount + 49 : 0;
-      io.emit('online_count', angkaBaru);
-      
-      handleDisconnect();
+      emitOnlineCount();
     });
   });
 
-  // Health check endpoint
-  app.get('/api/health', (_req, res) => {
-    res.json({ status: 'ok', app: 'Anonnect' });
+  app.get("/api/health", (_req, res) => {
+    res.json({ status: "ok", app: "Anonnect", onlineUsers: onlineUsersCount, mode: "Pure Human Matchmaking" });
   });
 
-  // Vite middleware in dev
-  if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
+  if (process.env.NODE_ENV !== "production") {
+    const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
+    const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get('*', (_req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+    app.get("*", (_req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
-  server.listen(PORT, '0.0.0.0', () => {
+  server.listen(PORT, "0.0.0.0", () => {
     console.log(`Anonnect Server running on http://0.0.0.0:${PORT}`);
   });
 }
 
-startServer();
+startServer().catch((error) => {
+  console.error("Failed to start Anonnect:", error);
+  process.exit(1);
+});
