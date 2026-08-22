@@ -2,8 +2,6 @@ import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 import {
-  Sun,
-  Moon,
   Users,
   Camera,
   Mic,
@@ -27,55 +25,11 @@ import {
 import { translations, type Lang } from "./i18n";
 import { socket } from "./socket";
 
-/**
- * ============================================================================
- *  ANONNECT — ChatInterface
- * ============================================================================
- *  Kontrak Socket.IO (event tambahan ditandai ✦):
- *
- *  EMIT (client -> server)
- *    "find_partner" | "send_message" (msg) | "typing" | "stop_typing"
- *    "unsend_message" (id) | "stop_chat"
- *  ✦ "mark_delivered" (msgId) | "mark_read" (msgId)
- *  ✦ "call_offer" {offer} | "call_answer" {answer} | "ice_candidate" {candidate}
- *  ✦ "call_declined" | "call_ended"
- *
- *  ON (server -> client)
- *    "online_count" (number) | "waiting" | "connected"
- *    "receive_message" (msg) | "delete_message" (id) | "partner_disconnected"
- *    "lawan_sedang_mengetik" | "lawan_berhenti_mengetik"
- *  ✦ "partner_online" | "partner_offline"
- *  ✦ "message_delivered" (msgId) | "message_read" (msgId)
- *  ✦ "call_offer" {offer} | "call_answer" {answer} | "ice_candidate" {candidate}
- *  ✦ "call_declined" | "call_ended"
- *
- * ⚠️ PENTING — VOICE NOTE GAGAL TERKIRIM KE PARTNER (walau di HP kamu sendiri
- * bisa play): audio dikirim sebagai base64 di dalam payload socket biasa.
- * Base64 menambah ~33% ukuran file, dan Socket.IO server defaultnya membatasi
- * payload ("maxHttpBufferSize") sekitar 1MB. Rekaman yang agak panjang bisa
- * melebihi itu dan GAGAL terkirim tanpa error yang kelihatan di frontend.
- * Fix di server (Node.js):
- *     const io = new Server(httpServer, { maxHttpBufferSize: 8e6 }); // 8MB
- * Untuk solusi yang lebih scalable jangka panjang: upload audio ke storage
- * (S3/Cloudinary/dst) lewat HTTP endpoint biasa, lalu kirim URL-nya saja
- * lewat socket — bukan raw base64.
- *
- * ⚠️ PENTING — VOICE CALL TIDAK ADA SUARA: STUN publik SERINGKALI TIDAK CUKUP
- * untuk banyak jaringan (NAT simetris, WiFi kantor/kampus, sebagian jaringan
- * seluler). Tanpa TURN server, koneksi ICE bisa gagal total — UI akan bilang
- * "in_call" padahal audio tidak pernah benar-benar mengalir. Isi ICE_SERVERS
- * di bawah dengan TURN server kamu sendiri (coturn self-hosted, atau layanan
- * seperti Twilio/Metered/Xirsys) untuk fix permanen.
- * ============================================================================
- */
-
 const ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },
-  // ✦ Tambahkan TURN server kamu di sini, WAJIB untuk produksi:
-  // { urls: "turn:your-turn-server.com:3478", username: "USERNAME", credential: "PASSWORD" },
 ];
 
-const MAX_RECORD_SECONDS = 120; // batas aman supaya payload base64 tidak meledak
+const MAX_RECORD_SECONDS = 120;
 
 type ConnectionStatus = "searching" | "connected" | "disconnected";
 type CallStatus = "idle" | "calling" | "incoming" | "in_call";
@@ -122,7 +76,7 @@ function formatDuration(sec: number): string {
 function StatusDot({ status }: { status: ConnectionStatus }) {
   const dot = STATUS_DOT[status];
   return (
-    <span className="relative flex h-2.5 w-2.5">
+    <span className="relative flex h-2.5 w-2.5 shrink-0">
       {status === "searching" && (
         <motion.span
           className={`absolute inline-flex h-full w-full rounded-full ${dot}`}
@@ -142,7 +96,30 @@ function ReceiptTicks({ status }: { status?: MessageStatus }) {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Pemutar voice note — mimeType eksplisit, durasi, dan error handling      */
+/*  Mini Shader Button (Khusus untuk tombol Tentang Developer)                */
+/* -------------------------------------------------------------------------- */
+function MiniShaderButton({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="relative inline-flex overflow-hidden rounded-full p-[1px] focus:outline-none active:scale-95 transition-transform shrink-0"
+    >
+      <motion.div
+        animate={{ rotate: 360 }}
+        transition={{ repeat: Infinity, duration: 3, ease: "linear" }}
+        className="absolute z-0 bg-[conic-gradient(from_90deg_at_50%_50%,#18181b_0%,#ffffff_50%,#18181b_100%)]"
+        style={{ width: "400%", height: "400%", top: "-150%", left: "-150%" }}
+      />
+      <span className="relative z-10 inline-flex h-full w-full cursor-pointer items-center justify-center rounded-full bg-[#09090b] px-3 py-1.5 text-[10px] sm:text-[11px] font-medium text-zinc-200 transition-colors hover:bg-[#18181b] tracking-wide gap-1.5">
+        {children}
+      </span>
+    </button>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Pemutar voice note                                                        */
 /* -------------------------------------------------------------------------- */
 interface VoiceBubblePlayerProps {
   src: string;
@@ -559,13 +536,8 @@ interface ChatInterfaceProps {
 }
 
 export default function ChatInterface({ onNavigateToAbout }: ChatInterfaceProps) {
-  const [darkMode, setDarkMode] = useState<boolean>(() => {
-    if (typeof window === "undefined") return true;
-    const saved = window.localStorage.getItem("anonnect-theme");
-    if (saved === "dark") return true;
-    if (saved === "light") return false;
-    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? true;
-  });
+  // Dark mode diset default selalu true
+  const [darkMode] = useState<boolean>(true);
 
   const [lang, setLang] = useState<Lang>(() => {
     if (typeof window === "undefined") return "id";
@@ -606,7 +578,6 @@ export default function ChatInterface({ onNavigateToAbout }: ChatInterfaceProps)
   const tr = translations[lang] || translations.id;
 
   useEffect(() => {
-    window.localStorage.setItem("anonnect-theme", darkMode ? "dark" : "light");
     const root = document.documentElement;
     if (darkMode) root.classList.add("dark");
     else root.classList.remove("dark");
@@ -966,33 +937,33 @@ export default function ChatInterface({ onNavigateToAbout }: ChatInterfaceProps)
   return (
     <div className={darkMode ? "dark" : ""}>
       <div className="flex flex-col h-[100dvh] w-full bg-slate-50 dark:bg-[#0B0F19] text-slate-800 dark:text-slate-100 transition-colors duration-300">
-        <header className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-slate-200/80 dark:border-slate-800/80 bg-white/80 dark:bg-[#0B0F19]/80 backdrop-blur-md sticky top-0 z-20">
-          <div className="flex items-center gap-2.5">
+        <header className="shrink-0 flex items-center justify-between px-3 sm:px-4 py-3 border-b border-slate-200/80 dark:border-slate-800/80 bg-white/80 dark:bg-[#0B0F19]/80 backdrop-blur-md sticky top-0 z-20">
+          <div className="flex items-center gap-2.5 overflow-hidden">
             <img
               src="/anonnect-logo.svg"
               alt="Anonnect Logo"
-              className="relative flex h-9 w-9 rounded-xl shadow-lg shadow-violet-500/20 object-cover"
+              className="relative flex h-9 w-9 rounded-xl shadow-lg shadow-violet-500/20 object-cover shrink-0"
             />
-            <div>
-              <h1 className="text-base font-bold tracking-tight bg-gradient-to-r from-cyan-500 to-violet-600 bg-clip-text text-transparent">
+            <div className="min-w-0">
+              <h1 className="text-base font-bold tracking-tight bg-gradient-to-r from-cyan-500 to-violet-600 bg-clip-text text-transparent truncate">
                 Anonnect
               </h1>
-              <div className="flex items-center gap-1.5 -mt-0.5">
+              <div className="flex items-center gap-1.5 -mt-0.5 whitespace-nowrap">
                 <StatusDot status={status} />
                 <span className="text-[11px] text-slate-500 dark:text-slate-400">{statusLabel}</span>
                 {status === "connected" && (
-                  <span className="flex items-center gap-1 ml-1 text-[11px] text-slate-400 dark:text-slate-500">
+                  <span className="flex items-center gap-1 ml-0.5 sm:ml-1 text-[11px] text-slate-400 dark:text-slate-500">
                     <span className="opacity-50">•</span>
-                    <span className={`h-1.5 w-1.5 rounded-full ${partnerOnline ? "bg-emerald-400" : "bg-slate-400"}`} />
-                    {partnerOnline ? tr.partnerOnline : tr.partnerOffline}
+                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${partnerOnline ? "bg-emerald-400" : "bg-slate-400"}`} />
+                    <span className="truncate max-w-[50px] sm:max-w-none">{partnerOnline ? "Online" : "Offline"}</span>
                   </span>
                 )}
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800/80 text-xs font-medium">
+          <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800/80 text-xs font-medium">
               <Users size={13} className="text-emerald-500" />
               <span className="tabular-nums">{onlineCount.toLocaleString(lang === "en" ? "en-US" : "id-ID")}</span>
             </div>
@@ -1003,7 +974,7 @@ export default function ChatInterface({ onNavigateToAbout }: ChatInterfaceProps)
               className="h-8 px-2 flex items-center gap-1 rounded-full bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 text-[11px] font-semibold transition-colors"
             >
               <Globe size={13} />
-              {lang.toUpperCase()}
+              <span className="hidden sm:inline">{lang.toUpperCase()}</span>
             </button>
 
             <button
@@ -1014,15 +985,7 @@ export default function ChatInterface({ onNavigateToAbout }: ChatInterfaceProps)
             >
               <Phone size={15} />
             </button>
-
-            <button
-              onClick={() => setDarkMode((v) => !v)}
-              aria-label={darkMode ? tr.themeLight : tr.themeDark}
-              title={darkMode ? tr.themeLight : tr.themeDark}
-              className="h-8 w-8 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-            >
-              {darkMode ? <Moon size={15} /> : <Sun size={15} />}
-            </button>
+            {/* Tombol Theme dihapus di sini sesuai permintaan agar tidak berdempetan */}
           </div>
         </header>
 
@@ -1103,18 +1066,19 @@ export default function ChatInterface({ onNavigateToAbout }: ChatInterfaceProps)
                 )}
               </form>
 
-              <button onClick={handleNext} className="h-10 px-3.5 flex items-center gap-1.5 rounded-full bg-gradient-to-br from-cyan-500 to-violet-600 text-white text-sm font-medium shadow-md">
+              <button onClick={handleNext} className="h-10 px-3.5 flex items-center gap-1.5 rounded-full bg-gradient-to-br from-cyan-500 to-violet-600 text-white text-sm font-medium shadow-md shrink-0">
                 <SkipForward size={15} />
                 <span className="hidden sm:inline">Next</span>
               </button>
             </div>
 
-            <div className="flex items-center justify-center gap-1.5 mt-2.5 text-[11px] text-slate-400 dark:text-slate-500">
-              <span>{tr.footerSecured}</span>
-              <span className="opacity-40">•</span>
-              <button onClick={onNavigateToAbout} className="hover:text-slate-600 dark:hover:text-slate-300 underline-offset-2 hover:underline">
-                <Info size={11} className="inline" /> {tr.footerAbout}
-              </button>
+            {/* Bagian footer Tentang Developer yang baru */}
+            <div className="flex items-center justify-center gap-2 sm:gap-3 mt-3 mb-1">
+              <span className="text-[10px] sm:text-[11px] text-slate-400 dark:text-slate-500">{tr.footerSecured}</span>
+              <MiniShaderButton onClick={onNavigateToAbout}>
+                <Info size={11} className="shrink-0 text-cyan-400" />
+                {tr.footerAbout}
+              </MiniShaderButton>
             </div>
           </div>
         </footer>
