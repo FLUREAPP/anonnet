@@ -12,7 +12,7 @@ type MessageType = "text" | "snap" | "photo" | "audio" | "voice";
 type MessageStatus = "sent" | "delivered" | "read";
 
 interface ChatMessage {
-  id: string;
+  id: string | number;
   sender: "me" | "stranger";
   type: MessageType;
   text?: string;
@@ -180,7 +180,7 @@ async function persistMedia(dataUrl: string, type: "image" | "audio") {
 
 async function normalizeMessage(input: ChatMessage): Promise<ChatMessage> {
   const sanitized: ChatMessage = {
-    id: String(input.id).slice(0, 128),
+    id: typeof input.id === "number" ? input.id : String(input.id).slice(0, 128),
     sender: "stranger",
     type: input.type,
     timestamp: Date.now(),
@@ -338,7 +338,7 @@ async function startServer() {
         !allow(socket, "send_message") ||
         (typeof messageId !== "string" && typeof messageId !== "number")
       ) return;
-      socket.to(socket.room).emit("delete_message", String(messageId).slice(0, 128));
+      socket.to(socket.room).emit("delete_message", typeof messageId === "number" ? messageId : String(messageId).slice(0, 128));
     });
 
     socket.on("typing", () => relay(socket, "lawan_sedang_mengetik", undefined, "typing"));
@@ -346,12 +346,12 @@ async function startServer() {
 
     socket.on("mark_delivered", (messageId: unknown) => {
       if (typeof messageId !== "string" && typeof messageId !== "number") return;
-      relay(socket, "message_delivered", String(messageId).slice(0, 128), "typing");
+      relay(socket, "message_delivered", typeof messageId === "number" ? messageId : String(messageId).slice(0, 128), "typing");
     });
 
     socket.on("mark_read", (messageId: unknown) => {
       if (typeof messageId !== "string" && typeof messageId !== "number") return;
-      relay(socket, "message_read", String(messageId).slice(0, 128), "typing");
+      relay(socket, "message_read", typeof messageId === "number" ? messageId : String(messageId).slice(0, 128), "typing");
     });
 
     socket.on("call_offer", (data: unknown) => relay(socket, "call_offer", data));
